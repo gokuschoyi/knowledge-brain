@@ -1,5 +1,5 @@
 import { Progress, Stack, Text, Box, Flex } from '@chakra-ui/react';
-import { IngestionJob } from '../../api/documents';
+import type { IngestionJob, IngestionLogEntry } from '../../api/types';
 import { Card } from '../common/Card';
 
 export function IngestionProgress({ job }: { job: IngestionJob | null }) {
@@ -34,7 +34,7 @@ export function IngestionProgress({ job }: { job: IngestionJob | null }) {
       </Progress.Root>
 
       <Stack gap='2'>
-        {job.log.map((entry, index) => (
+        {job.log.map((entry: IngestionLogEntry, index: number) => (
           <Text key={`${entry.step}-${index}`} fontSize='sm' color='slate.300'>
             <Text as='span' color='slate.500' mr='2'>
               {entry.step}

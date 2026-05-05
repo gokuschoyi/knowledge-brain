@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { ChangeEvent, FormEvent, useState } from 'react';
 import {
   Box,
   Button,
@@ -8,11 +8,13 @@ import {
   Heading,
   Text,
   NativeSelect,
+  Textarea,
 } from '@chakra-ui/react';
 import { Brain, FileUp, Settings2 } from 'lucide-react';
 
 import { Brain as BrainType } from '../../api/brains';
 import { ModelCatalog } from '../../api/models';
+import type { DocumentIngestResponse } from '../../api/types';
 import { Card } from '../common/Card';
 
 export function IngestForm({
@@ -22,7 +24,7 @@ export function IngestForm({
   modelCatalog,
   brains,
 }: {
-  onSubmit: (payload: any) => Promise<void>;
+  onSubmit: (payload: FormData) => Promise<DocumentIngestResponse>;
   loading: boolean;
   ingestionActive: boolean;
   modelCatalog: ModelCatalog;
@@ -30,28 +32,33 @@ export function IngestForm({
 }) {
   const [brainId, setBrainId] = useState('');
   const [sourceType, setSourceType] = useState('file');
+  const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [provider, setProvider] = useState('');
-  const [model, setModel] = useState('');
+  const [provider, setProvider] = useState('google');
+  const [model, setModel] = useState('gemini-3-flash-preview');
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!brainId || !provider || !model) return;
 
     const formData = new FormData();
-    formData.append('brain_id', brainId);
+    formData.append('brain', brainId);
+    formData.append('title', title);
     formData.append('source_type', sourceType);
     formData.append('llm_provider', provider);
     formData.append('llm_model', model);
 
     if (sourceType === 'file' && file) {
-      formData.append('file', file);
+      formData.append('raw_file', file);
     } else if (sourceType === 'url' && url) {
       formData.append('url', url);
+    } else if (sourceType === 'text' && url) {
+      formData.append('raw_text', url);
     }
 
     await onSubmit(formData);
+    setTitle('');
     setUrl('');
     setFile(null);
   }
@@ -59,6 +66,16 @@ export function IngestForm({
   // modelCatalog.providers is a Record<string, ProviderOption>
   const providerIds = Object.keys(modelCatalog.providers);
   const selectedProvider = provider ? modelCatalog.providers[provider] : null;
+  const handleBrainChange = (e: ChangeEvent<HTMLSelectElement>) =>
+    setBrainId(e.target.value);
+  const handleSourceTypeChange = (e: ChangeEvent<HTMLSelectElement>) =>
+    setSourceType(e.target.value);
+  const handleProviderChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setProvider(e.target.value);
+    setModel('');
+  };
+  const handleModelChange = (e: ChangeEvent<HTMLSelectElement>) =>
+    setModel(e.target.value);
 
   return (
     <Card>
@@ -75,6 +92,17 @@ export function IngestForm({
 
       <form onSubmit={handleSubmit}>
         <Stack gap='5'>
+          <Field.Root invalid={!title}>
+            <Field.Label color='slate.300'>Document Title</Field.Label>
+            <Input
+              placeholder='e.g. Q4 Financial Report'
+              bg='slate.950'
+              borderColor='slate.800'
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </Field.Root>
+
           <Field.Root invalid={!brainId}>
             <Field.Label color='slate.300'>
               <Box as='span' display='flex' alignItems='center' gap='2'>
@@ -86,7 +114,7 @@ export function IngestForm({
                 bg='slate.950'
                 borderColor='slate.800'
                 value={brainId}
-                onChange={(e: any) => setBrainId(e.target.value)}
+                onChange={handleBrainChange}
               >
                 <option value=''>Select a brain</option>
                 {brains.map((b) => (
@@ -105,10 +133,11 @@ export function IngestForm({
                 bg='slate.950'
                 borderColor='slate.800'
                 value={sourceType}
-                onChange={(e: any) => setSourceType(e.target.value)}
+                onChange={handleSourceTypeChange}
               >
                 <option value='file'>Local File</option>
                 <option value='url'>Remote URL</option>
+                <option value='text'>Raw Text</option>
               </NativeSelect.Field>
             </NativeSelect.Root>
           </Field.Root>
@@ -124,6 +153,15 @@ export function IngestForm({
                 onChange={(e) => setUrl(e.target.value)}
               />
             </Field.Root>
+          ) : sourceType === 'text' ? (
+            <Textarea
+              placeholder='Enter or paste the content to ingest...'
+              bg='slate.950'
+              borderColor='slate.800'
+              minH='150px'
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
           ) : (
             <Field.Root invalid={!file}>
               <Field.Label color='slate.300'>File</Field.Label>
@@ -161,10 +199,7 @@ export function IngestForm({
                     bg='slate.950'
                     borderColor='slate.800'
                     value={provider}
-                    onChange={(e: any) => {
-                      setProvider(e.target.value);
-                      setModel('');
-                    }}
+                    onChange={handleProviderChange}
                   >
                     <option value=''>Select provider</option>
                     {providerIds.map((pId) => (
@@ -186,7 +221,7 @@ export function IngestForm({
                     borderColor='slate.800'
                     value={model}
                     // disabled={!provider}
-                    onChange={(e: any) => setModel(e.target.value)}
+                    onChange={handleModelChange}
                   >
                     <option value=''>Select model</option>
                     {selectedProvider?.models.map((m) => (

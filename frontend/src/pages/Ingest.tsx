@@ -6,10 +6,10 @@ import {
   getIngestionJob,
   ingestDocument,
   listDocuments,
-  type IngestionJob,
 } from '../api/documents';
 import { getBrains } from '../api/brains';
 import { getModelCatalog } from '../api/models';
+import type { IngestionJob } from '../api/types';
 import { DocumentList } from '../components/ingest/DocumentList';
 import { IngestForm } from '../components/ingest/IngestForm';
 import { IngestionProgress } from '../components/ingest/IngestionProgress';
@@ -74,7 +74,7 @@ export function IngestPage() {
       <VStack gap={6} align='stretch'>
         <IngestForm
           onSubmit={async (payload) => {
-            await ingestMutation.mutateAsync(payload);
+            return ingestMutation.mutateAsync(payload);
           }}
           loading={ingestMutation.isPending}
           ingestionActive={ingestionActive}
