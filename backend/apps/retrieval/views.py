@@ -8,12 +8,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.agents.retrieval_agent import answer_question, stream_question_answer
+from apps.core.utils import to_json_safe
 from apps.knowledge.models import ChatSession
 from apps.retrieval.serializers import ChatQuerySerializer, ChatSessionSerializer
 
 
 def _sse_event(payload: dict) -> str:
-    return f"data: {json.dumps(payload)}\n\n"
+    return f"data: {json.dumps(to_json_safe(payload))}\n\n"
 
 
 class ChatQueryView(APIView):

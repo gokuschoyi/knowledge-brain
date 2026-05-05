@@ -1,5 +1,6 @@
 from django.db import models
 
+from apps.core.models import Brain
 from apps.documents.models import Chunk, Document
 from apps.knowledge.models import Entity
 
@@ -22,6 +23,7 @@ class SelfHealingTask(models.Model):
     priority = models.IntegerField(default=1)
     title = models.CharField(max_length=255)
     description = models.TextField()
+    brain = models.ForeignKey(Brain, null=True, blank=True, on_delete=models.SET_NULL, related_name="self_healing_tasks")
     related_document = models.ForeignKey(Document, null=True, blank=True, on_delete=models.SET_NULL)
     related_chunk = models.ForeignKey(Chunk, null=True, blank=True, on_delete=models.SET_NULL)
     related_entity = models.ForeignKey(Entity, null=True, blank=True, on_delete=models.SET_NULL)
@@ -34,4 +36,3 @@ class SelfHealingTask(models.Model):
 
     class Meta:
         ordering = ["status", "-priority", "-created_at"]
-
