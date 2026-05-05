@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Flex,
@@ -11,25 +11,35 @@ import {
 } from '@chakra-ui/react';
 import { Send, MessageSquare } from 'lucide-react';
 
-import type { ChatResponse } from '../../api/types';
+import type { ChatMessage } from '../../api/types';
 import { Card } from '../common/Card';
-import { ConfidenceBadge } from './ConfidenceBadge';
 import { MessageBubble } from './MessageBubble';
 
 export function ChatWindow({
-  response,
-  currentQuestion,
+  messages,
+  pendingQuestion,
   streamingAnswer,
+  selectedAssistantMessageId,
+  onAssistantMessageSelect,
   onSubmit,
   loading,
 }: {
-  response: ChatResponse | null;
-  currentQuestion: string | null;
+  messages: ChatMessage[];
+  pendingQuestion: string | null;
   streamingAnswer: string;
+  selectedAssistantMessageId: number | null;
+  onAssistantMessageSelect: (messageId: number) => void;
   onSubmit: (question: string) => Promise<void>;
   loading: boolean;
 }) {
   const [question, setQuestion] = useState('');
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    element.scrollTop = element.scrollHeight;
+  }, [messages, pendingQuestion, streamingAnswer, loading]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -49,9 +59,9 @@ export function ChatWindow({
       p={0}
       overflow='hidden'
     >
-      <Box flex='1' overflowY='auto' p={6}>
+      <Box ref={scrollRef} flex='1' overflowY='auto' p={6}>
         <Stack gap='6' align='stretch'>
-          {!response && !loading && (
+          {!messages.length && !pendingQuestion && !loading && (
             <Flex
               direction='column'
               h='full'
@@ -67,24 +77,30 @@ export function ChatWindow({
             </Flex>
           )}
 
-          {currentQuestion && (
-            <MessageBubble role='user' content={currentQuestion} />
-          )}
+          {messages.map((message) => (
+            <MessageBubble
+              key={message.id}
+              role={message.role}
+              content={message.content}
+              active={
+                message.role === 'assistant' &&
+                message.id === selectedAssistantMessageId
+              }
+              onClick={
+                message.role === 'assistant'
+                  ? () => onAssistantMessageSelect(message.id)
+                  : undefined
+              }
+            />
+          ))}
 
-          {(response || streamingAnswer) && (
-            <>
-              <MessageBubble
-                role='assistant'
-                content={streamingAnswer || response?.answer || ''}
-              />
-              {response && !streamingAnswer ? (
-                <Flex align='center' gap='2' px='2'>
-                  <ConfidenceBadge score={response.confidence_score} />
-                  <Box h='px' flex='1' bg='slate.800' />
-                </Flex>
-              ) : null}
-            </>
-          )}
+          {pendingQuestion ? (
+            <MessageBubble role='user' content={pendingQuestion} />
+          ) : null}
+
+          {streamingAnswer ? (
+            <MessageBubble role='assistant' content={streamingAnswer} />
+          ) : null}
 
           {loading && !streamingAnswer && (
             <Flex direction='column' gap='4'>

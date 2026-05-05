@@ -4,7 +4,7 @@ import { Card } from '../common/Card';
 
 export function SourcePanel({ sources }: { sources: ChatSource[] }) {
   return (
-    <Card>
+    <Card shadow='none'>
       <Heading size='sm' color='white' mb={3}>
         Sources
       </Heading>
