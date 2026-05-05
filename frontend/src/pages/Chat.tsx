@@ -15,11 +15,14 @@ import { ChatWindow } from '../components/chat/ChatWindow';
 import { SourcePanel } from '../components/chat/SourcePanel';
 import { KnowledgeGapPanel } from '../components/chat/KnowledgeGapPanel';
 import { LoadingState } from '../components/common/LoadingState';
-import { ChatResponse } from '../api/chat';
+import { queryChatStreaming } from '../api/chat';
+import type { ChatResponse } from '../api/types';
 
 export function ChatPage() {
   const [selectedBrainId, setSelectedBrainId] = useState<string>('');
   const [chatResponse, setChatResponse] = useState<ChatResponse | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
+  const [streamingAnswer, setStreamingAnswer] = useState('');
   const [loading, setLoading] = useState(false);
 
   const brainsQuery = useQuery({ queryKey: ['brains'], queryFn: getBrains });
@@ -27,17 +30,30 @@ export function ChatPage() {
   async function handleChat(question: string) {
     if (!selectedBrainId) return;
     setLoading(true);
+    setCurrentQuestion(question);
+    setStreamingAnswer('');
+    setChatResponse(null);
     try {
-      const response = await fetch(`/api/agents/chat/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brain_id: selectedBrainId,
-          message: question,
-        }),
-      });
-      const data = await response.json();
-      setChatResponse(data);
+      await queryChatStreaming(
+        question,
+        chatResponse?.session_id ?? null,
+        selectedBrainId,
+        (event) => {
+          switch (event.type) {
+            case 'token':
+              setStreamingAnswer((current) => current + event.delta);
+              return;
+            case 'final':
+              setChatResponse(event.payload);
+              setStreamingAnswer('');
+              return;
+            case 'error':
+              throw new Error(event.message || 'Streaming chat failed.');
+            default:
+              return;
+          }
+        },
+      );
     } catch (error) {
       console.error('Chat error:', error);
     } finally {
@@ -131,6 +147,8 @@ export function ChatPage() {
       <Box flex='1' h='full'>
         <ChatWindow
           response={chatResponse}
+          currentQuestion={currentQuestion}
+          streamingAnswer={streamingAnswer}
           onSubmit={handleChat}
           loading={loading}
         />

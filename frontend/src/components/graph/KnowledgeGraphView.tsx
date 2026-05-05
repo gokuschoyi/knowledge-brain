@@ -1,14 +1,11 @@
 import { useMemo, useState } from 'react';
-import ReactFlow, { Background, Controls, Edge, Node } from 'reactflow';
+import ReactFlow, { Background, Controls } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Box, Heading, Text, Stack, Grid, Code } from '@chakra-ui/react';
+import type { GraphResponse } from '../../api/types';
 import { Card } from '../common/Card';
 
-export function KnowledgeGraphView({
-  graph,
-}: {
-  graph: { nodes: Node[]; edges: Edge[] };
-}) {
+export function KnowledgeGraphView({ graph }: { graph: GraphResponse }) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const nodes = useMemo(() => {
@@ -23,7 +20,7 @@ export function KnowledgeGraphView({
       position: node.position ?? { x: 80, y: 80 + index * 140 },
       data: {
         originalType: node.type,
-        label: node.data?.label ?? node.id,
+        label: node.label ?? node.id,
         ...(node.data || {}),
       },
     }));
@@ -37,7 +34,7 @@ export function KnowledgeGraphView({
       },
       data: {
         originalType: node.type,
-        label: node.data?.label ?? node.id,
+        label: node.label ?? node.id,
         ...(node.data || {}),
       },
     }));
@@ -52,9 +49,13 @@ export function KnowledgeGraphView({
 
   const selectedNodeData = useMemo(() => {
     if (!selectedNode) return null;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { embedding, ...rest } = selectedNode.data || {};
-    return rest;
+    const nodeData = selectedNode.data || {};
+    if ('embedding' in nodeData) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { embedding, ...rest } = nodeData;
+      return rest;
+    }
+    return nodeData;
   }, [selectedNode]);
 
   return (

@@ -1,11 +1,8 @@
 import { Box, Heading, Text, VStack } from '@chakra-ui/react';
+import type { ChatSource } from '../../api/types';
 import { Card } from '../common/Card';
 
-export function SourcePanel({
-  sources,
-}: {
-  sources: { document_title: string; chunk_id: number; snippet: string }[];
-}) {
+export function SourcePanel({ sources }: { sources: ChatSource[] }) {
   return (
     <Card>
       <Heading size='sm' color='white' mb={3}>

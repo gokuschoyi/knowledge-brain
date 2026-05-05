@@ -11,17 +11,21 @@ import {
 } from '@chakra-ui/react';
 import { Send, MessageSquare } from 'lucide-react';
 
-import { ChatResponse } from '../../api/chat';
+import type { ChatResponse } from '../../api/types';
 import { Card } from '../common/Card';
 import { ConfidenceBadge } from './ConfidenceBadge';
 import { MessageBubble } from './MessageBubble';
 
 export function ChatWindow({
   response,
+  currentQuestion,
+  streamingAnswer,
   onSubmit,
   loading,
 }: {
   response: ChatResponse | null;
+  currentQuestion: string | null;
+  streamingAnswer: string;
   onSubmit: (question: string) => Promise<void>;
   loading: boolean;
 }) {
@@ -63,17 +67,26 @@ export function ChatWindow({
             </Flex>
           )}
 
-          {response && (
+          {currentQuestion && (
+            <MessageBubble role='user' content={currentQuestion} />
+          )}
+
+          {(response || streamingAnswer) && (
             <>
-              <MessageBubble role='assistant' content={response.answer} />
-              <Flex align='center' gap='2' px='2'>
-                <ConfidenceBadge score={response.confidence_score} />
-                <Box h='px' flex='1' bg='slate.800' />
-              </Flex>
+              <MessageBubble
+                role='assistant'
+                content={streamingAnswer || response?.answer || ''}
+              />
+              {response && !streamingAnswer ? (
+                <Flex align='center' gap='2' px='2'>
+                  <ConfidenceBadge score={response.confidence_score} />
+                  <Box h='px' flex='1' bg='slate.800' />
+                </Flex>
+              ) : null}
             </>
           )}
 
-          {loading && (
+          {loading && !streamingAnswer && (
             <Flex direction='column' gap='4'>
               <Box
                 bg='slate.800'

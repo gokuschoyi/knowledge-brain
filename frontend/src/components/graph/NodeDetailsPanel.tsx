@@ -1,7 +1,8 @@
 import { Heading, Text, Box, Code } from '@chakra-ui/react';
+import type { GraphNode } from '../../api/types';
 import { Card } from '../common/Card';
 
-export function NodeDetailsPanel({ node }: { node: any | null }) {
+export function NodeDetailsPanel({ node }: { node: GraphNode | null }) {
   if (!node) {
     return (
       <Card>
