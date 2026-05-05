@@ -3,29 +3,40 @@ from __future__ import annotations
 from apps.core.utils import token_estimate
 
 
-def chunk_text(text: str, target_tokens: int = 900, overlap_tokens: int = 120) -> list[dict]:
-    paragraphs = [part.strip() for part in text.split("\n\n") if part.strip()]
+def chunk_text(text: str, target_tokens: int = 400, overlap_tokens: int = 50) -> list[dict]:
+    # Recursive character splitting logic
+    separators = ["\n\n", "\n", ". ", " ", ""]
+    
+    def split_text(text: str, current_separators: list[str]) -> list[str]:
+        if token_estimate(text) <= target_tokens or not current_separators:
+            return [text]
+        
+        separator = current_separators[0]
+        parts = text.split(separator)
+        final_parts = []
+        
+        for part in parts:
+            if token_estimate(part) > target_tokens:
+                final_parts.extend(split_text(part, current_separators[1:]))
+            else:
+                final_parts.append(part)
+        return final_parts
+
+    raw_chunks = split_text(text, separators)
     chunks: list[dict] = []
-    current: list[str] = []
-    current_tokens = 0
-
-    for paragraph in paragraphs:
-        paragraph_tokens = token_estimate(paragraph)
-        if current and current_tokens + paragraph_tokens > target_tokens:
-            chunk_text_value = "\n\n".join(current)
-            chunks.append({"text": chunk_text_value, "token_count": token_estimate(chunk_text_value)})
-            overlap_words = " ".join(chunk_text_value.split()[-overlap_tokens:])
-            current = [overlap_words, paragraph] if overlap_words else [paragraph]
-            current_tokens = token_estimate("\n\n".join(current))
+    current_chunk = ""
+    
+    for part in raw_chunks:
+        if current_chunk and token_estimate(current_chunk + part) > target_tokens:
+            chunks.append({"text": current_chunk.strip(), "token_count": token_estimate(current_chunk)})
+            # Basic overlap: take the last 15% of the text
+            current_chunk = current_chunk[int(len(current_chunk) * 0.85):] + part
         else:
-            current.append(paragraph)
-            current_tokens += paragraph_tokens
+            current_chunk += part + " "
 
-    if current:
-        chunk_text_value = "\n\n".join(current)
-        chunks.append({"text": chunk_text_value, "token_count": token_estimate(chunk_text_value)})
+    if current_chunk:
+        chunks.append({"text": current_chunk.strip(), "token_count": token_estimate(current_chunk)})
 
-    if not chunks and text.strip():
-        chunks.append({"text": text.strip(), "token_count": token_estimate(text.strip())})
     return chunks
+
 

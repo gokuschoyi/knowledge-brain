@@ -8,7 +8,7 @@ from apps.knowledge.models import Entity, Relationship
 class DocumentIngestSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
-        fields = ["title", "source_type", "raw_text", "raw_file", "url", "tags", "llm_provider", "llm_model"]
+        fields = ["brain", "title", "source_type", "raw_text", "raw_file", "url", "tags", "llm_provider", "llm_model"]
 
     def validate(self, attrs):
         source_type = attrs.get("source_type")
