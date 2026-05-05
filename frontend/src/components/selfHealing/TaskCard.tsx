@@ -5,7 +5,7 @@ import {
   Text,
   Badge,
   HStack,
-  Code,
+  Stack,
 } from '@chakra-ui/react';
 import type { SelfHealingTask } from '../../api/types';
 import { Button } from '../common/Button';
@@ -13,15 +13,35 @@ import { Card } from '../common/Card';
 
 export function TaskCard({
   task,
+  isSelected,
+  onSelect,
   onRun,
   onIgnore,
 }: {
   task: SelfHealingTask;
+  isSelected: boolean;
+  onSelect: (id: number) => void;
   onRun: (id: number) => Promise<void>;
   onIgnore: (id: number) => Promise<void>;
 }) {
+  const statusPalette =
+    task.status === 'completed'
+      ? 'green'
+      : task.status === 'pending'
+        ? 'orange'
+        : task.status === 'running'
+          ? 'blue'
+          : task.status === 'failed'
+            ? 'red'
+            : 'gray';
+
   return (
-    <Card>
+    <Card
+      borderColor={isSelected ? 'brand.500' : 'slate.800'}
+      bg={isSelected ? 'rgba(15, 23, 42, 0.92)' : 'slate.900'}
+      cursor='pointer'
+      onClick={() => onSelect(task.id)}
+    >
       <Flex mb='2' align='flex-start' justify='space-between' gap='3'>
         <Box>
           <Heading size='sm' color='white'>
@@ -31,61 +51,72 @@ export function TaskCard({
             {task.description}
           </Text>
         </Box>
-        <Badge
-          size='sm'
-          colorPalette={
-            task.status === 'completed'
-              ? 'green'
-              : task.status === 'pending'
-                ? 'orange'
-                : 'blue'
-          }
-          textTransform='uppercase'
-        >
+        <Badge size='sm' colorPalette={statusPalette} textTransform='uppercase'>
           {task.status}
         </Badge>
       </Flex>
 
-      <HStack mb='4' gap='2' fontSize='xs' color='slate.500'>
-        <Text fontWeight='bold' color='slate.400' textTransform='uppercase'>
-          {task.task_type}
-        </Text>
-        <Text>·</Text>
-        <Text>Priority {task.priority}</Text>
-      </HStack>
+      <Stack mb='4' gap='2'>
+        <HStack gap='2' fontSize='xs' color='slate.500' flexWrap='wrap'>
+          <Text fontWeight='bold' color='slate.400' textTransform='uppercase'>
+            {task.task_type.split('_').join(' ')}
+          </Text>
+          <Text>·</Text>
+          <Text>Priority {task.priority}</Text>
+          {task.brain_name ? (
+            <>
+              <Text>·</Text>
+              <Text>{task.brain_name}</Text>
+            </>
+          ) : null}
+        </HStack>
 
-      {task.result && Object.keys(task.result).length > 0 && (
-        <Box
-          mb='4'
-          p='3'
-          bg='slate.900'
-          borderRadius='md'
-          borderWidth='1px'
-          borderColor='slate.800'
-          maxH='200px'
-          overflow='auto'
-        >
-          <Code
-            variant='plain'
-            display='block'
-            whiteSpace='pre-wrap'
-            fontSize='xs'
-            color='slate.300'
-          >
-            {JSON.stringify(task.result, null, 2)}
-          </Code>
-        </Box>
-      )}
+        <HStack gap='2' fontSize='xs' color='slate.400' flexWrap='wrap'>
+          {task.related_document_title ? (
+            <Badge colorPalette='cyan' variant='subtle'>
+              Doc: {task.related_document_title}
+            </Badge>
+          ) : null}
+          {task.related_entity_name ? (
+            <Badge colorPalette='purple' variant='subtle'>
+              Entity: {task.related_entity_name}
+            </Badge>
+          ) : null}
+        </HStack>
+      </Stack>
+
+      <Text mb='4' fontSize='xs' color='slate.500'>
+        {task.status === 'completed'
+          ? 'Repair finished. Select this task to inspect the result.'
+          : task.status === 'running'
+            ? 'Repair is currently in progress.'
+            : task.status === 'failed'
+              ? 'Repair failed. Select this task to inspect the error.'
+              : task.status === 'ignored'
+                ? 'This task has been ignored.'
+                : 'Select this task to review context before running it.'}
+      </Text>
 
       <HStack gap='2'>
-        <Button size='sm' onClick={() => onRun(task.id)}>
+        <Button
+          size='sm'
+          onClick={(event) => {
+            event.stopPropagation();
+            void onRun(task.id);
+          }}
+          disabled={task.status === 'running' || task.status === 'completed'}
+        >
           Run Repair
         </Button>
         <Button
           size='sm'
           variant='outline'
           colorPalette='slate'
-          onClick={() => onIgnore(task.id)}
+          onClick={(event) => {
+            event.stopPropagation();
+            void onIgnore(task.id);
+          }}
+          disabled={task.status === 'ignored'}
         >
           Ignore
         </Button>
