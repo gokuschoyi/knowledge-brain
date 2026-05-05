@@ -6,7 +6,7 @@ export function IngestionProgress({ job }: { job: IngestionJob | null }) {
   if (!job) return null;
 
   return (
-    <Card>
+    <Card display='flex' flexDirection='column' minH='0' maxH='320px'>
       <Flex mb='3' align='center' justify='space-between'>
         <Box>
           <Text fontSize='sm' fontWeight='semibold' color='white'>
@@ -33,7 +33,7 @@ export function IngestionProgress({ job }: { job: IngestionJob | null }) {
         </Progress.Track>
       </Progress.Root>
 
-      <Stack gap='2'>
+      <Stack gap='2' overflowY='auto' minH='0' pr='1'>
         {job.log.map((entry: IngestionLogEntry, index: number) => (
           <Text key={`${entry.step}-${index}`} fontSize='sm' color='slate.300'>
             <Text as='span' color='slate.500' mr='2'>

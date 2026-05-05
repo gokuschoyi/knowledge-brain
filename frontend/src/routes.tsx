@@ -16,13 +16,13 @@ export const router = createBrowserRouter([
     element: <App />,
     children: [
       { index: true, element: <DashboardPage /> },
-      { path: 'ingest', element: <IngestPage /> },
       { path: 'brains', element: <BrainsPage /> },
-      { path: 'chat', element: <ChatPage /> },
-      { path: 'graph', element: <KnowledgeGraphPage /> },
-      { path: 'self-healing', element: <SelfHealingPage /> },
       { path: 'documents', element: <DocumentsPage /> },
       { path: 'documents/:id', element: <DocumentDetailPage /> },
+      { path: 'chat', element: <ChatPage /> },
+      { path: 'ingest', element: <IngestPage /> },
+      { path: 'graph', element: <KnowledgeGraphPage /> },
+      { path: 'self-healing', element: <SelfHealingPage /> },
     ],
   },
 ]);

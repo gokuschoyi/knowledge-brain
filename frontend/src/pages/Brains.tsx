@@ -84,8 +84,8 @@ export function BrainsPage() {
   if (isLoading) return <LoadingState label='Loading knowledge brains...' />;
 
   return (
-    <Stack gap='6'>
-      <Flex align='center' justify='space-between'>
+    <Stack gap='6' h='full' minH='0'>
+      <Flex align='center' justify='space-between' p='6'>
         <Box>
           <Heading size='xl' color='white'>
             Knowledge Brains
@@ -154,45 +154,55 @@ export function BrainsPage() {
         </Card>
       )}
 
-      <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} gap='6'>
-        {brains?.map((brain) => (
-          <Card key={brain.id}>
-            <Stack gap='4'>
-              <HStack justify='space-between' align='flex-start'>
-                <HStack gap='3'>
-                  <Icon as={BrainIcon} color='brand.400' h='5' w='5' />
-                  <Heading size='md' color='white'>
-                    {brain.name}
-                  </Heading>
+      <Flex
+        flexDirection={'column'}
+        gap={6}
+        overflowY='auto'
+        px={6}
+        pb={6}
+        pr={1}
+        w={'100%'}
+      >
+        <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} gap='6' w={'full'}>
+          {brains?.map((brain) => (
+            <Card key={brain.id}>
+              <Stack gap='4'>
+                <HStack justify='space-between' align='flex-start'>
+                  <HStack gap='3'>
+                    <Icon as={BrainIcon} color='brand.400' h='5' w='5' />
+                    <Heading size='md' color='white'>
+                      {brain.name}
+                    </Heading>
+                  </HStack>
+                  <HStack gap='1'>
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      onClick={() => handleEdit(brain)}
+                      px='2'
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      variant='ghost'
+                      size='sm'
+                      colorPalette='red'
+                      onClick={() => deleteMutation.mutate(brain.id)}
+                      loading={deleteMutation.isPending}
+                      px='2'
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </HStack>
                 </HStack>
-                <HStack gap='1'>
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    onClick={() => handleEdit(brain)}
-                    px='2'
-                  >
-                    <Pencil size={14} />
-                  </Button>
-                  <Button
-                    variant='ghost'
-                    size='sm'
-                    colorPalette='red'
-                    onClick={() => deleteMutation.mutate(brain.id)}
-                    loading={deleteMutation.isPending}
-                    px='2'
-                  >
-                    <Trash2 size={14} />
-                  </Button>
-                </HStack>
-              </HStack>
-              <Text fontSize='sm' color='slate.400' lineClamp={3}>
-                {brain.description || 'No description provided.'}
-              </Text>
-            </Stack>
-          </Card>
-        ))}
-      </SimpleGrid>
+                <Text fontSize='sm' color='slate.400' lineClamp={3}>
+                  {brain.description || 'No description provided.'}
+                </Text>
+              </Stack>
+            </Card>
+          ))}
+        </SimpleGrid>
+      </Flex>
     </Stack>
   );
 }
