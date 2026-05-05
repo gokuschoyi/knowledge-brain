@@ -30,8 +30,14 @@ class DocumentIngestView(APIView):
 
 
 class DocumentListView(generics.ListAPIView):
-    queryset = Document.objects.all()
     serializer_class = DocumentSerializer
+
+    def get_queryset(self):
+        queryset = Document.objects.all()
+        brain_id = self.request.query_params.get("brain_id")
+        if brain_id:
+            queryset = queryset.filter(brain_id=brain_id)
+        return queryset
 
 
 class DocumentDetailView(generics.RetrieveAPIView):

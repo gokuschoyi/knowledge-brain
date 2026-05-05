@@ -32,13 +32,27 @@ class BrainDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class DashboardView(APIView):
     def get(self, request):
-        average_quality = Document.objects.aggregate(avg=Avg("quality_score")).get("avg") or 0
+        brain_id = request.query_params.get("brain_id")
+        documents = Document.objects.all()
+        chunks = Chunk.objects.all()
+        entities = Entity.objects.all()
+        relationships = Relationship.objects.all()
+        tasks = SelfHealingTask.objects.all()
+
+        if brain_id:
+            documents = documents.filter(brain_id=brain_id)
+            chunks = chunks.filter(document__brain_id=brain_id)
+            entities = entities.filter(brain_id=brain_id)
+            relationships = relationships.filter(evidence_chunk__document__brain_id=brain_id)
+            tasks = tasks.filter(brain_id=brain_id)
+
+        average_quality = documents.aggregate(avg=Avg("quality_score")).get("avg") or 0
         payload = {
-            "documents": Document.objects.count(),
-            "chunks": Chunk.objects.count(),
-            "entities": Entity.objects.count(),
-            "relationships": Relationship.objects.count(),
-            "open_self_healing_tasks": SelfHealingTask.objects.filter(
+            "documents": documents.count(),
+            "chunks": chunks.count(),
+            "entities": entities.count(),
+            "relationships": relationships.count(),
+            "open_self_healing_tasks": tasks.filter(
                 Q(status=SelfHealingTask.STATUS_PENDING) | Q(status=SelfHealingTask.STATUS_RUNNING)
             ).count(),
             "average_quality_score": round(average_quality, 2),

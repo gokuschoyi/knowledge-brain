@@ -9,8 +9,18 @@ from apps.self_healing.tasks import run_self_healing_task
 
 
 class SelfHealingTaskListView(generics.ListAPIView):
-    queryset = SelfHealingTask.objects.all()
     serializer_class = SelfHealingTaskSerializer
+
+    def get_queryset(self):
+        queryset = SelfHealingTask.objects.select_related(
+            "brain",
+            "related_document",
+            "related_entity",
+        )
+        brain_id = self.request.query_params.get("brain_id")
+        if brain_id:
+            queryset = queryset.filter(brain_id=brain_id)
+        return queryset
 
 
 class SelfHealingRunTaskView(APIView):
@@ -30,10 +40,13 @@ class SelfHealingIgnoreTaskView(APIView):
 
 class SelfHealingRunAllView(APIView):
     def post(self, request):
-        tasks = SelfHealingTask.objects.filter(status=SelfHealingTask.STATUS_PENDING)[:20]
+        tasks = SelfHealingTask.objects.filter(status=SelfHealingTask.STATUS_PENDING)
+        brain_id = request.data.get("brain_id") or request.query_params.get("brain_id")
+        if brain_id:
+            tasks = tasks.filter(brain_id=brain_id)
+        tasks = tasks[:20]
         queued = []
         for task in tasks:
             run_self_healing_task.delay(task.id)
             queued.append(task.id)
         return Response({"queued_task_ids": queued})
-

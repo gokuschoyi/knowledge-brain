@@ -10,10 +10,20 @@ from apps.knowledge.serializers import ClaimSerializer, EntitySerializer, Relati
 
 class GraphView(APIView):
     def get(self, request):
+        brain_id = request.query_params.get("brain_id")
         nodes = []
         edges = []
 
-        for document in Document.objects.all()[:50]:
+        document_qs = Document.objects.all()
+        entity_qs = Entity.objects.all()
+        relationship_qs = Relationship.objects.select_related("source_entity", "target_entity")
+
+        if brain_id:
+            document_qs = document_qs.filter(brain_id=brain_id)
+            entity_qs = entity_qs.filter(mentions__chunk__document__brain_id=brain_id).distinct()
+            relationship_qs = relationship_qs.filter(evidence_chunk__document__brain_id=brain_id).distinct()
+
+        for document in document_qs[:50]:
             nodes.append(
                 {
                     "id": f"document-{document.id}",
@@ -23,7 +33,7 @@ class GraphView(APIView):
                 }
             )
 
-        for entity in Entity.objects.all()[:200]:
+        for entity in entity_qs[:200]:
             nodes.append(
                 {
                     "id": f"entity-{entity.id}",
@@ -33,7 +43,7 @@ class GraphView(APIView):
                 }
             )
 
-        for relationship in Relationship.objects.select_related("source_entity", "target_entity")[:300]:
+        for relationship in relationship_qs[:300]:
             edges.append(
                 {
                     "id": f"rel-{relationship.id}",
@@ -71,4 +81,3 @@ class EntityRelationshipsView(generics.ListAPIView):
 class ClaimListView(generics.ListAPIView):
     queryset = Claim.objects.all()
     serializer_class = ClaimSerializer
-
