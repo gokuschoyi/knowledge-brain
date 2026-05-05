@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch } from './client';
 
 export type DashboardMetrics = {
   documents: number;
@@ -10,6 +10,5 @@ export type DashboardMetrics = {
 };
 
 export function getDashboard() {
-  return apiFetch<DashboardMetrics>("/dashboard/");
+  return apiFetch<DashboardMetrics>('/dashboard/');
 }
-

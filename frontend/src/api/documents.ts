@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch } from './client';
 
 export type Document = {
   id: number;
@@ -27,7 +27,7 @@ export type IngestionJob = {
 };
 
 export function listDocuments() {
-  return apiFetch<Document[]>("/documents/");
+  return apiFetch<Document[]>('/documents/');
 }
 
 export function getDocument(id: string | number) {
@@ -46,11 +46,16 @@ export function getDocumentRelationships(id: string | number) {
   return apiFetch<any[]>(`/documents/${id}/relationships/`);
 }
 
-export async function ingestDocument(payload: FormData | Record<string, unknown>) {
-  return apiFetch<{ document_id: number; job_id: number; status: string }>("/documents/ingest/", {
-    method: "POST",
-    body: payload instanceof FormData ? payload : JSON.stringify(payload),
-  });
+export async function ingestDocument(
+  payload: FormData | Record<string, unknown>,
+) {
+  return apiFetch<{ document_id: number; job_id: number; status: string }>(
+    '/documents/ingest/',
+    {
+      method: 'POST',
+      body: payload instanceof FormData ? payload : JSON.stringify(payload),
+    },
+  );
 }
 
 export function getIngestionJob(id: number) {
@@ -58,13 +63,16 @@ export function getIngestionJob(id: number) {
 }
 
 export function retryDocument(id: string | number) {
-  return apiFetch<{ document_id: number; job_id: number; status: string }>(`/documents/${id}/retry/`, {
-    method: "POST",
-  });
+  return apiFetch<{ document_id: number; job_id: number; status: string }>(
+    `/documents/${id}/retry/`,
+    {
+      method: 'POST',
+    },
+  );
 }
 
 export function deleteDocument(id: string | number) {
   return apiFetch<void>(`/documents/${id}/delete/`, {
-    method: "DELETE",
+    method: 'DELETE',
   });
 }

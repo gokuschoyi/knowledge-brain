@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch } from './client';
 
 export type ModelOption = {
   id: string;
@@ -31,5 +31,5 @@ export type ModelCatalog = {
 };
 
 export function getModelCatalog() {
-  return apiFetch<ModelCatalog>("/models/");
+  return apiFetch<ModelCatalog>('/models/');
 }

@@ -1,32 +1,39 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery } from '@tanstack/react-query';
+import { SimpleGrid, Text, Heading } from '@chakra-ui/react';
 
-import { getDashboard } from "../api/dashboard";
-import { Card } from "../components/common/Card";
-import { LoadingState } from "../components/common/LoadingState";
+import { getDashboard } from '../api/dashboard';
+import { Card } from '../components/common/Card';
+import { LoadingState } from '../components/common/LoadingState';
 
 export function DashboardPage() {
-  const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: getDashboard });
+  const { data, isLoading } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: getDashboard,
+  });
 
-  if (isLoading || !data) return <LoadingState label="Loading dashboard..." />;
+  if (isLoading || !data) return <LoadingState label='Loading dashboard...' />;
 
   const stats = [
-    ["Documents", data.documents],
-    ["Chunks", data.chunks],
-    ["Entities", data.entities],
-    ["Relationships", data.relationships],
-    ["Open repair tasks", data.open_self_healing_tasks],
-    ["Avg quality", data.average_quality_score],
+    { label: 'Documents', value: data.documents },
+    { label: 'Chunks', value: data.chunks },
+    { label: 'Entities', value: data.entities },
+    { label: 'Relationships', value: data.relationships },
+    { label: 'Open repair tasks', value: data.open_self_healing_tasks },
+    { label: 'Avg quality', value: data.average_quality_score },
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {stats.map(([label, value]) => (
+    <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} gap={6}>
+      {stats.map(({ label, value }) => (
         <Card key={label}>
-          <div className="text-sm text-slate-400">{label}</div>
-          <div className="mt-2 text-3xl font-semibold text-white">{value}</div>
+          <Text fontSize='sm' color='slate.400'>
+            {label}
+          </Text>
+          <Heading size='xl' mt={2} color='white' fontWeight='semibold'>
+            {value}
+          </Heading>
         </Card>
       ))}
-    </div>
+    </SimpleGrid>
   );
 }
-
