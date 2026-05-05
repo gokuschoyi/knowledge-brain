@@ -1,5 +1,6 @@
 from pgvector.django import VectorField
 from django.db import models
+from apps.core.models import Brain
 
 
 class Document(models.Model):
@@ -23,6 +24,7 @@ class Document(models.Model):
         (SOURCE_URL, "URL"),
     ]
 
+    brain = models.ForeignKey(Brain, on_delete=models.CASCADE, related_name="documents", null=True)
     title = models.CharField(max_length=255)
     source_type = models.CharField(max_length=50, choices=SOURCE_CHOICES)
     raw_text = models.TextField(blank=True)

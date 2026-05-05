@@ -2,9 +2,11 @@ from pgvector.django import VectorField
 from django.db import models
 
 from apps.documents.models import Chunk
+from apps.core.models import Brain
 
 
 class Entity(models.Model):
+    brain = models.ForeignKey(Brain, on_delete=models.CASCADE, related_name="entities", null=True)
     name = models.CharField(max_length=255)
     canonical_name = models.CharField(max_length=255, blank=True)
     entity_type = models.CharField(max_length=100)
@@ -60,6 +62,7 @@ class Relationship(models.Model):
 
 
 class ChatSession(models.Model):
+    brain = models.ForeignKey(Brain, on_delete=models.CASCADE, related_name="chat_sessions", null=True)
     title = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
