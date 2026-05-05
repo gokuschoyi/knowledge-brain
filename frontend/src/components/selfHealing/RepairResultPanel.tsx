@@ -1,6 +1,7 @@
+import type { SelfHealingTask } from '../../api/types';
 import { Card } from '../common/Card';
 
-export function RepairResultPanel({ task }: { task: any | null }) {
+export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
   if (!task?.result || !Object.keys(task.result).length) return null;
   return (
     <Card>

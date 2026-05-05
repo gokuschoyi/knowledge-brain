@@ -7,6 +7,7 @@ import {
   HStack,
   Code,
 } from '@chakra-ui/react';
+import type { SelfHealingTask } from '../../api/types';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
 
@@ -15,7 +16,7 @@ export function TaskCard({
   onRun,
   onIgnore,
 }: {
-  task: any;
+  task: SelfHealingTask;
   onRun: (id: number) => Promise<void>;
   onIgnore: (id: number) => Promise<void>;
 }) {

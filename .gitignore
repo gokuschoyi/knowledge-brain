@@ -13,3 +13,5 @@ node_modules/
 dist/
 coverage/
 postgres_data/
+.agents/
+.codex/

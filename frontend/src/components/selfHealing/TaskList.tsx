@@ -1,4 +1,5 @@
 import { VStack } from '@chakra-ui/react';
+import type { SelfHealingTask } from '../../api/types';
 import { TaskCard } from './TaskCard';
 
 export function TaskList({
@@ -6,7 +7,7 @@ export function TaskList({
   onRun,
   onIgnore,
 }: {
-  tasks: any[];
+  tasks: SelfHealingTask[];
   onRun: (id: number) => Promise<void>;
   onIgnore: (id: number) => Promise<void>;
 }) {
