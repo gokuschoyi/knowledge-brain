@@ -1,9 +1,19 @@
-import { Link } from "react-router-dom";
+import { Link as RouterLink } from 'react-router-dom';
+import {
+  Box,
+  Flex,
+  Heading,
+  Text,
+  Stack,
+  Badge,
+  Link as ChakraLink,
+  HStack,
+  Separator,
+} from '@chakra-ui/react';
 
-import { Document } from "../../api/documents";
-import { Badge } from "../common/Badge";
-import { Button } from "../common/Button";
-import { Card } from "../common/Card";
+import { Document } from '../../api/documents';
+import { Button } from '../common/Button';
+import { Card } from '../common/Card';
 
 export function DocumentList({
   documents,
@@ -18,50 +28,100 @@ export function DocumentList({
 }) {
   return (
     <Card>
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-white">Recent documents</h3>
-        <Badge>{documents.length} total</Badge>
-      </div>
-      <div className="space-y-3">
+      <Flex mb='4' align='center' justify='space-between'>
+        <Heading size='sm' color='white'>
+          Recent documents
+        </Heading>
+        <Badge size='sm' variant='subtle' colorPalette='slate'>
+          {documents.length} total
+        </Badge>
+      </Flex>
+      <Stack gap='3' align='stretch'>
         {documents.map((document) => (
-          <div key={document.id} className="rounded-md border border-slate-800 px-3 py-3 hover:bg-slate-900">
-            <div className="flex items-start justify-between gap-3">
-              <Link to={`/documents/${document.id}`} className="min-w-0 flex-1">
-                <div className="font-medium text-white">{document.title}</div>
-              </Link>
-              <Badge>{document.status}</Badge>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-              <span>{document.llm_provider || "provider?"}</span>
-              <span>{document.llm_model || "model?"}</span>
-            </div>
-            <Link to={`/documents/${document.id}`} className="block">
-              <div className="mt-2 text-sm text-slate-400">{document.summary || "No summary yet."}</div>
-              {document.error_message ? (
-                <div className="mt-2 text-sm text-rose-300">{document.error_message}</div>
-              ) : null}
-            </Link>
-            {document.status === "failed" || onDelete ? (
-              <div className="mt-3 flex gap-2">
-                {document.status === "failed" && onRetry ? (
-                  <Button disabled={busyDocumentId === document.id} onClick={() => void onRetry(document.id)}>
-                    {busyDocumentId === document.id ? "Retrying..." : "Retry"}
-                  </Button>
-                ) : null}
-                {onDelete ? (
+          <Box
+            key={document.id}
+            borderRadius='md'
+            borderWidth='1px'
+            borderColor='slate.800'
+            px='4'
+            py='4'
+            _hover={{ bg: 'slate.950' }}
+            transition='background 0.2s'
+          >
+            <Flex align='flex-start' justify='space-between' gap='3'>
+              <ChakraLink asChild flex='1' _hover={{ textDecoration: 'none' }}>
+                <RouterLink to={`/documents/${document.id}`}>
+                  <Text fontWeight='medium' color='white'>
+                    {document.title}
+                  </Text>
+                </RouterLink>
+              </ChakraLink>
+              <Badge
+                size='sm'
+                colorPalette={
+                  document.status === 'completed'
+                    ? 'green'
+                    : document.status === 'failed'
+                      ? 'red'
+                      : 'blue'
+                }
+              >
+                {document.status}
+              </Badge>
+            </Flex>
+
+            <HStack mt='2' gap='3' fontSize='xs' color='slate.500'>
+              <Text>{document.llm_provider || 'provider?'}</Text>
+              <Separator orientation='vertical' h='3' borderColor='slate.700' />
+              <Text>{document.llm_model || 'model?'}</Text>
+            </HStack>
+
+            <ChakraLink
+              asChild
+              display='block'
+              mt='2'
+              _hover={{ textDecoration: 'none' }}
+            >
+              <RouterLink to={`/documents/${document.id}`}>
+                <Text fontSize='sm' color='slate.400' lineClamp={2}>
+                  {document.summary || 'No summary yet.'}
+                </Text>
+              </RouterLink>
+            </ChakraLink>
+
+            {document.error_message && (
+              <Text mt='2' fontSize='sm' color='red.300'>
+                {document.error_message}
+              </Text>
+            )}
+
+            {(document.status === 'failed' || onDelete) && (
+              <HStack mt='4' gap='2'>
+                {document.status === 'failed' && onRetry && (
                   <Button
-                    className="bg-slate-700 text-white hover:bg-slate-600"
+                    size='sm'
+                    disabled={busyDocumentId === document.id}
+                    onClick={() => void onRetry(document.id)}
+                  >
+                    {busyDocumentId === document.id ? 'Retrying...' : 'Retry'}
+                  </Button>
+                )}
+                {onDelete && (
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    colorPalette='red'
                     disabled={busyDocumentId === document.id}
                     onClick={() => void onDelete(document.id)}
                   >
                     Delete
                   </Button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+                )}
+              </HStack>
+            )}
+          </Box>
         ))}
-      </div>
+      </Stack>
     </Card>
   );
 }

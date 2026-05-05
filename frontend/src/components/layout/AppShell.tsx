@@ -1,16 +1,18 @@
-import { PropsWithChildren } from "react";
-
-import { Sidebar } from "./Sidebar";
-import { Topbar } from "./Topbar";
+import { PropsWithChildren } from 'react';
+import { Flex, Box } from '@chakra-ui/react';
+import { Sidebar } from './Sidebar';
+import { Topbar } from './Topbar';
 
 export function AppShell({ children }: PropsWithChildren) {
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-100">
+    <Flex h='100dvh' overflow='hidden' bg='bg' color='fg'>
       <Sidebar />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <Flex direction='column' flex='1' minW='0' overflow='hidden'>
         <Topbar />
-        <main className="min-h-0 flex-1 overflow-y-auto p-6">{children}</main>
-      </div>
-    </div>
+        <Box as='main' flex='1' overflowY='auto' p='6' minW='0'>
+          {children}
+        </Box>
+      </Flex>
+    </Flex>
   );
 }

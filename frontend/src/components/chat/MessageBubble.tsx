@@ -1,8 +1,32 @@
-export function MessageBubble({ role, content }: { role: "user" | "assistant"; content: string }) {
+import { Box, Flex, Text } from '@chakra-ui/react';
+
+export function MessageBubble({
+  role,
+  content,
+}: {
+  role: 'user' | 'assistant';
+  content: string;
+}) {
   return (
-    <div className={`rounded-md px-4 py-3 text-sm ${role === "user" ? "bg-cyan-500 text-slate-950" : "border border-slate-800 bg-slate-900 text-slate-100"}`}>
-      <pre className="m-0 whitespace-pre-wrap font-sans">{content}</pre>
-    </div>
+    <Flex justify={role === 'user' ? 'flex-end' : 'flex-start'}>
+      <Box
+        maxW='85%'
+        borderRadius='2xl'
+        px={4}
+        py={2.5}
+        fontSize='sm'
+        shadow='sm'
+        bg={role === 'user' ? 'brand.600' : 'slate.800'}
+        color={role === 'user' ? 'white' : 'slate.100'}
+        border='1px'
+        borderColor={role === 'user' ? 'brand.500' : 'slate.700'}
+        borderTopLeftRadius={role === 'assistant' ? '0' : '2xl'}
+        borderTopRightRadius={role === 'user' ? '0' : '2xl'}
+      >
+        <Text whiteSpace='pre-wrap' lineHeight='relaxed'>
+          {content}
+        </Text>
+      </Box>
+    </Flex>
   );
 }
-

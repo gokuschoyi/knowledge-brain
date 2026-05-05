@@ -1,39 +1,85 @@
-import { BrainCircuit, Files, GitBranch, LayoutDashboard, MessageSquare, Sparkles, Upload } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { Link, useLocation } from 'react-router-dom';
+import { Box, Flex, Stack, Icon, Text, Heading } from '@chakra-ui/react';
+import {
+  LayoutDashboard,
+  MessageSquare,
+  FileUp,
+  Network,
+  Zap,
+  BrainCircuit,
+  Brain,
+} from 'lucide-react';
 
-const items = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/ingest", label: "Ingest", icon: Upload },
-  { to: "/chat", label: "Chat", icon: MessageSquare },
-  { to: "/graph", label: "Knowledge Graph", icon: GitBranch },
-  { to: "/self-healing", label: "Self-Healing", icon: Sparkles },
-  { to: "/documents", label: "Documents", icon: Files },
+const NAV_ITEMS = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/' },
+  { label: 'My Brains', icon: Brain, path: '/brains' },
+  { label: 'Documents', icon: FileUp, path: '/documents' },
+  { label: 'Research Chat', icon: MessageSquare, path: '/chat' },
+  { label: 'Ingest Docs', icon: FileUp, path: '/ingest' },
+  { label: 'Knowledge Graph', icon: Network, path: '/graph' },
+  { label: 'Self Healing', icon: Zap, path: '/self-healing' },
 ];
 
 export function Sidebar() {
+  const location = useLocation();
+
   return (
-    <aside className="flex w-64 flex-col border-r border-slate-800 bg-slate-950 px-4 py-6">
-      <div className="mb-8 flex items-center gap-3 text-white">
-        <BrainCircuit className="h-6 w-6 text-cyan-400" />
-        <div>
-          <div className="text-sm font-semibold">Knowledge Brain</div>
-          <div className="text-xs text-slate-400">Autonomous knowledge ops</div>
-        </div>
-      </div>
-      <nav className="space-y-1">
-        {items.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-md px-3 py-2 text-sm ${isActive ? "bg-slate-800 text-white" : "text-slate-400 hover:bg-slate-900 hover:text-white"}`
-            }
+    <Box
+      w='64'
+      bg='slate.950'
+      borderRight='1px'
+      borderColor='slate.800'
+      h='full'
+      display={{ base: 'none', lg: 'block' }}
+    >
+      <Flex direction='column' h='full' p='6'>
+        <Flex align='center' gap='3' mb='10'>
+          <Icon as={BrainCircuit} h='8' w='8' color='brand.500' />
+          <Heading
+            size='md'
+            color='white'
+            fontWeight='bold'
+            letterSpacing='tight'
           >
-            <Icon className="h-4 w-4" />
-            {label}
-          </NavLink>
-        ))}
-      </nav>
-    </aside>
+            Knowledge
+            <Text as='span' color='brand.500'>
+              Brain
+            </Text>
+          </Heading>
+        </Flex>
+
+        <Stack gap='2' flex='1'>
+          {NAV_ITEMS.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <Link key={item.path} to={item.path}>
+                <Flex
+                  align='center'
+                  gap='3'
+                  px='4'
+                  py='3'
+                  borderRadius='lg'
+                  transition='all 0.2s'
+                  bg={isActive ? 'brand.900/40' : 'transparent'}
+                  color={isActive ? 'brand.400' : 'slate.400'}
+                  _hover={{
+                    bg: isActive ? 'brand.900/40' : 'slate.900',
+                    color: isActive ? 'brand.400' : 'white',
+                  }}
+                >
+                  <Icon as={item.icon} h='5' w='5' />
+                  <Text
+                    fontSize='sm'
+                    fontWeight={isActive ? 'semibold' : 'medium'}
+                  >
+                    {item.label}
+                  </Text>
+                </Flex>
+              </Link>
+            );
+          })}
+        </Stack>
+      </Flex>
+    </Box>
   );
 }

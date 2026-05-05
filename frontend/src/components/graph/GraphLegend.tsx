@@ -1,15 +1,17 @@
-import { Card } from "../common/Card";
+import { Heading, Text, VStack } from '@chakra-ui/react';
+import { Card } from '../common/Card';
 
 export function GraphLegend() {
   return (
     <Card>
-      <h3 className="mb-3 text-sm font-semibold text-white">Legend</h3>
-      <div className="space-y-2 text-sm text-slate-300">
-        <div>Document nodes represent ingested sources.</div>
-        <div>Entity nodes capture extracted concepts.</div>
-        <div>Edges represent grounded relationships.</div>
-      </div>
+      <Heading size='sm' color='white' mb={3}>
+        Legend
+      </Heading>
+      <VStack gap={2} align='stretch' fontSize='sm' color='slate.300'>
+        <Text>Document nodes represent ingested sources.</Text>
+        <Text>Entity nodes capture extracted concepts.</Text>
+        <Text>Edges represent grounded relationships.</Text>
+      </VStack>
     </Card>
   );
 }
-

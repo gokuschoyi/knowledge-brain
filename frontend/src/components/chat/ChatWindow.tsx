@@ -1,100 +1,126 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useState } from 'react';
+import {
+  Box,
+  Flex,
+  Input,
+  IconButton,
+  Icon,
+  Text,
+  Spinner,
+  Stack,
+} from '@chakra-ui/react';
+import { Send, MessageSquare } from 'lucide-react';
 
-import { ChatResponse } from "../../api/chat";
-import { ModelCatalog } from "../../api/models";
-import { Button } from "../common/Button";
-import { Card } from "../common/Card";
-import { ConfidenceBadge } from "./ConfidenceBadge";
-import { MessageBubble } from "./MessageBubble";
+import { ChatResponse } from '../../api/chat';
+import { Card } from '../common/Card';
+import { ConfidenceBadge } from './ConfidenceBadge';
+import { MessageBubble } from './MessageBubble';
 
 export function ChatWindow({
   response,
   onSubmit,
   loading,
-  modelCatalog,
 }: {
   response: ChatResponse | null;
-  onSubmit: (question: string, llmProvider: string, llmModel: string) => Promise<void>;
+  onSubmit: (question: string) => Promise<void>;
   loading: boolean;
-  modelCatalog: ModelCatalog;
 }) {
-  const [question, setQuestion] = useState("What is Smart Tutor and how does it relate to lesson plans?");
-  const [llmProvider, setLlmProvider] = useState(modelCatalog.default_provider);
-  const [llmModel, setLlmModel] = useState(modelCatalog.default_model);
-  const providerOptions = modelCatalog.providers;
-  const modelsForProvider = providerOptions[llmProvider]?.models || [];
+  const [question, setQuestion] = useState('');
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    await onSubmit(question, llmProvider, llmModel);
+    if (!question.trim() || loading) return;
+    const currentQuestion = question;
+    setQuestion('');
+    await onSubmit(currentQuestion);
   }
 
   return (
-    <Card>
-      <form className="mb-4 space-y-4" onSubmit={handleSubmit}>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm text-slate-300">Answer provider</label>
-            <select
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
-              value={llmProvider}
-              onChange={(event) => {
-                const nextProvider = event.target.value;
-                setLlmProvider(nextProvider);
-                const nextModel = modelCatalog.providers[nextProvider]?.models.find((model) => model.recommended)?.id
-                  || modelCatalog.providers[nextProvider]?.models[0]?.id
-                  || "";
-                setLlmModel(nextModel);
-              }}
+    <Card
+      display='flex'
+      flexDirection='column'
+      h='full'
+      bg='slate.950'
+      borderColor='slate.800'
+      p={0}
+      overflow='hidden'
+    >
+      <Box flex='1' overflowY='auto' p={6}>
+        <Stack gap='6' align='stretch'>
+          {!response && !loading && (
+            <Flex
+              direction='column'
+              h='full'
+              align='center'
+              justify='center'
+              py={20}
+              opacity={0.5}
             >
-              {Object.entries(providerOptions).map(([providerKey, provider]) => (
-                <option key={providerKey} value={providerKey}>
-                  {provider.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-slate-300">Answer model</label>
-            <select
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
-              value={llmModel}
-              onChange={(event) => setLlmModel(event.target.value)}
+              <Icon as={MessageSquare} h='12' w='12' mb='4' />
+              <Text fontSize='sm' fontStyle='italic' textAlign='center'>
+                Select a brain and start a conversation.
+              </Text>
+            </Flex>
+          )}
+
+          {response && (
+            <>
+              <MessageBubble role='assistant' content={response.answer} />
+              <Flex align='center' gap='2' px='2'>
+                <ConfidenceBadge score={response.confidence_score} />
+                <Box h='px' flex='1' bg='slate.800' />
+              </Flex>
+            </>
+          )}
+
+          {loading && (
+            <Flex direction='column' gap='4'>
+              <Box
+                bg='slate.800'
+                h='10'
+                w='full'
+                borderRadius='2xl'
+                borderTopLeftRadius='0'
+              />
+              <Spinner size='sm' color='brand.500' />
+            </Flex>
+          )}
+        </Stack>
+      </Box>
+
+      <Box p={4} borderTop='1px' borderColor='slate.800' bg='slate.900'>
+        <form onSubmit={handleSubmit}>
+          <Flex
+            gap='2'
+            bg='slate.950'
+            borderRadius='xl'
+            border='1px'
+            borderColor='slate.700'
+            p='1.5'
+          >
+            <Input
+              placeholder='Ask anything...'
+              variant='flushed'
+              border='none'
+              px='3'
+              py='2'
+              fontSize='sm'
+              color='slate.200'
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+            />
+            <IconButton
+              aria-label='Send message'
+              colorPalette='brand'
+              disabled={loading || !question.trim()}
+              type='submit'
+              borderRadius='lg'
             >
-              {modelsForProvider.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900 px-3 py-3 text-sm text-slate-400">
-          Retrieval uses the shared embedding provider. This selector controls the model that synthesizes the answer.
-        </div>
-        <div className="flex gap-3">
-          <input className="flex-1 rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm" value={question} onChange={(event) => setQuestion(event.target.value)} />
-          <Button disabled={loading} type="submit">
-            {loading ? "Thinking..." : "Ask"}
-          </Button>
-        </div>
-      </form>
-      <div className="space-y-3">
-        <MessageBubble role="user" content={question} />
-        {response ? (
-          <>
-            <div className="flex items-center gap-2">
-              <ConfidenceBadge score={response.confidence_score} />
-              {response.llm_provider && response.llm_model ? (
-                <div className="text-xs text-slate-500">
-                  {response.llm_provider} · {response.llm_model}
-                </div>
-              ) : null}
-            </div>
-            <MessageBubble role="assistant" content={response.answer} />
-          </>
-        ) : null}
-      </div>
+              {loading ? <Spinner size='xs' /> : <Send size={16} />}
+            </IconButton>
+          </Flex>
+        </form>
+      </Box>
     </Card>
   );
 }

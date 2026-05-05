@@ -1,6 +1,6 @@
-import { Outlet } from "react-router-dom";
+import { Outlet } from 'react-router-dom';
 
-import { AppShell } from "./components/layout/AppShell";
+import { AppShell } from './components/layout/AppShell';
 
 export function App() {
   return (
@@ -9,4 +9,3 @@ export function App() {
     </AppShell>
   );
 }
-

@@ -1,18 +1,25 @@
-import { useMemo, useState } from "react";
-import ReactFlow, { Background, Controls, Edge, Node } from "reactflow";
-import "reactflow/dist/style.css";
+import { useMemo, useState } from 'react';
+import ReactFlow, { Background, Controls, Edge, Node } from 'reactflow';
+import 'reactflow/dist/style.css';
+import { Box, Heading, Text, Stack, Grid, Code } from '@chakra-ui/react';
+import { Card } from '../common/Card';
 
-import { Card } from "../common/Card";
-
-export function KnowledgeGraphView({ graph }: { graph: { nodes: Node[]; edges: Edge[] } }) {
+export function KnowledgeGraphView({
+  graph,
+}: {
+  graph: { nodes: Node[]; edges: Edge[] };
+}) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
   const nodes = useMemo(() => {
-    const documentNodes = graph.nodes.filter((node) => node.type === "document");
-    const entityNodes = graph.nodes.filter((node) => node.type !== "document");
+    const documentNodes = graph.nodes.filter(
+      (node) => node.type === 'document',
+    );
+    const entityNodes = graph.nodes.filter((node) => node.type !== 'document');
 
     const positionedDocuments = documentNodes.map((node, index) => ({
       ...node,
-      type: "default",
+      type: 'default',
       position: node.position ?? { x: 80, y: 80 + index * 140 },
       data: {
         originalType: node.type,
@@ -23,7 +30,7 @@ export function KnowledgeGraphView({ graph }: { graph: { nodes: Node[]; edges: E
 
     const positionedEntities = entityNodes.map((node, index) => ({
       ...node,
-      type: "default",
+      type: 'default',
       position: node.position ?? {
         x: 420 + (index % 3) * 260,
         y: 80 + Math.floor(index / 3) * 140,
@@ -38,29 +45,70 @@ export function KnowledgeGraphView({ graph }: { graph: { nodes: Node[]; edges: E
     return [...positionedDocuments, ...positionedEntities];
   }, [graph.nodes]);
 
-  const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) || null, [nodes, selectedNodeId]);
+  const selectedNode = useMemo(
+    () => nodes.find((node) => node.id === selectedNodeId) || null,
+    [nodes, selectedNodeId],
+  );
+
+  const selectedNodeData = useMemo(() => {
+    if (!selectedNode) return null;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { embedding, ...rest } = selectedNode.data || {};
+    return rest;
+  }, [selectedNode]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <Card>
-        <div className="h-[640px] overflow-hidden rounded-md">
+    <Grid
+      gap='6'
+      templateColumns={{ base: '1fr', lg: '1fr 320px' }}
+      flex='1'
+      minH='0'
+    >
+      <Card p='0' overflow='hidden' display='flex' flexDirection='column'>
+        <Box flex='1' minH='600px' position='relative' bg='slate.950'>
           <ReactFlow
             nodes={nodes}
             edges={graph.edges}
             onNodeClick={(_, node) => setSelectedNodeId(node.id)}
             fitView
+            style={{ width: '100%', height: '100%' }}
           >
-            <Background />
+            <Background color='#334155' gap={20} />
             <Controls />
           </ReactFlow>
-        </div>
+        </Box>
       </Card>
-      <div className="space-y-6">
+
+      <Stack gap='6'>
         <Card>
-          <h3 className="mb-2 text-sm font-semibold text-white">Selected node</h3>
-          <pre className="whitespace-pre-wrap text-xs text-slate-300">{selectedNode ? JSON.stringify(selectedNode.data, null, 2) : "Click a node to inspect it."}</pre>
+          <Heading
+            size='xs'
+            color='white'
+            mb='3'
+            textTransform='uppercase'
+            letterSpacing='wider'
+          >
+            Selected Node
+          </Heading>
+          {selectedNodeData ? (
+            <Code
+              variant='plain'
+              bg='transparent'
+              p='0'
+              fontSize='xs'
+              color='slate.300'
+              whiteSpace='pre-wrap'
+              wordBreak='break-word'
+            >
+              {JSON.stringify(selectedNodeData, null, 2)}
+            </Code>
+          ) : (
+            <Text fontSize='sm' color='slate.500'>
+              Click a node to inspect it.
+            </Text>
+          )}
         </Card>
-      </div>
-    </div>
+      </Stack>
+    </Grid>
   );
 }

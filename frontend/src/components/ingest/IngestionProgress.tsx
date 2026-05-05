@@ -1,29 +1,48 @@
-import { IngestionJob } from "../../api/documents";
-import { Card } from "../common/Card";
+import { Progress, Stack, Text, Box, Flex } from '@chakra-ui/react';
+import { IngestionJob } from '../../api/documents';
+import { Card } from '../common/Card';
 
 export function IngestionProgress({ job }: { job: IngestionJob | null }) {
   if (!job) return null;
 
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-semibold text-white">Ingestion progress</h3>
-          <p className="text-xs text-slate-400">{job.current_step || "Queued"}</p>
-        </div>
-        <div className="text-sm text-cyan-300">{job.progress}%</div>
-      </div>
-      <div className="mb-4 h-2 rounded-full bg-slate-800">
-        <div className="h-2 rounded-full bg-cyan-400" style={{ width: `${job.progress}%` }} />
-      </div>
-      <div className="space-y-2">
+      <Flex mb='3' align='center' justify='space-between'>
+        <Box>
+          <Text fontSize='sm' fontWeight='semibold' color='white'>
+            Ingestion progress
+          </Text>
+          <Text fontSize='xs' color='slate.400'>
+            {job.current_step || 'Queued'}
+          </Text>
+        </Box>
+        <Text fontSize='sm' color='brand.400'>
+          {job.progress}%
+        </Text>
+      </Flex>
+
+      <Progress.Root
+        value={job.progress}
+        colorPalette='brand'
+        size='sm'
+        borderRadius='full'
+        mb='4'
+      >
+        <Progress.Track bg='slate.800'>
+          <Progress.Range borderRadius='full' />
+        </Progress.Track>
+      </Progress.Root>
+
+      <Stack gap='2'>
         {job.log.map((entry, index) => (
-          <div key={`${entry.step}-${index}`} className="text-sm text-slate-300">
-            <span className="text-slate-500">{entry.step}</span> {entry.message}
-          </div>
+          <Text key={`${entry.step}-${index}`} fontSize='sm' color='slate.300'>
+            <Text as='span' color='slate.500' mr='2'>
+              {entry.step}
+            </Text>
+            {entry.message}
+          </Text>
         ))}
-      </div>
+      </Stack>
     </Card>
   );
 }
-

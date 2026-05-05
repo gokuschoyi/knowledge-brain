@@ -1,179 +1,221 @@
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { useState } from 'react';
+import {
+  Box,
+  Button,
+  Field,
+  Input,
+  Stack,
+  Heading,
+  Text,
+  NativeSelect,
+} from '@chakra-ui/react';
+import { Brain, FileUp, Settings2 } from 'lucide-react';
 
-import { ModelCatalog } from "../../api/models";
-import { Button } from "../common/Button";
-import { Card } from "../common/Card";
+import { Brain as BrainType } from '../../api/brains';
+import { ModelCatalog } from '../../api/models';
+import { Card } from '../common/Card';
 
 export function IngestForm({
   onSubmit,
   loading,
   ingestionActive,
   modelCatalog,
+  brains,
 }: {
-  onSubmit: (payload: FormData | Record<string, unknown>) => Promise<void>;
+  onSubmit: (payload: any) => Promise<void>;
   loading: boolean;
   ingestionActive: boolean;
   modelCatalog: ModelCatalog;
+  brains: BrainType[];
 }) {
-  const defaultProvider = modelCatalog.default_provider;
-  const defaultModel = modelCatalog.default_model;
-  const [title, setTitle] = useState("");
-  const [sourceType, setSourceType] = useState("text");
-  const [rawText, setRawText] = useState("");
-  const [url, setUrl] = useState("");
-  const [tags, setTags] = useState("");
+  const [brainId, setBrainId] = useState('');
+  const [sourceType, setSourceType] = useState('file');
+  const [url, setUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
-  const [llmProvider, setLlmProvider] = useState(defaultProvider);
-  const [llmModel, setLlmModel] = useState(defaultModel);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [provider, setProvider] = useState('');
+  const [model, setModel] = useState('');
 
-  const providerOptions = modelCatalog.providers;
-  const modelsForProvider = providerOptions[llmProvider]?.models || [];
-  const submitDisabled = loading || ingestionActive;
-  const isPristine = useMemo(
-    () =>
-      !title
-      && sourceType === "text"
-      && !rawText
-      && !url
-      && !tags
-      && !file
-      && llmProvider === defaultProvider
-      && llmModel === defaultModel,
-    [defaultModel, defaultProvider, file, llmModel, llmProvider, rawText, sourceType, tags, title, url]
-  );
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!brainId || !provider || !model) return;
 
-  function resetForm() {
-    setTitle("");
-    setSourceType("text");
-    setRawText("");
-    setUrl("");
-    setTags("");
+    const formData = new FormData();
+    formData.append('brain_id', brainId);
+    formData.append('source_type', sourceType);
+    formData.append('llm_provider', provider);
+    formData.append('llm_model', model);
+
+    if (sourceType === 'file' && file) {
+      formData.append('file', file);
+    } else if (sourceType === 'url' && url) {
+      formData.append('url', url);
+    }
+
+    await onSubmit(formData);
+    setUrl('');
     setFile(null);
-    setLlmProvider(defaultProvider);
-    setLlmModel(defaultModel);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
   }
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (sourceType === "file" && file) {
-      const formData = new FormData();
-      formData.append("title", title);
-      formData.append("source_type", sourceType);
-      formData.append("raw_file", file);
-      formData.append("tags", JSON.stringify(tags.split(",").map((tag) => tag.trim()).filter(Boolean)));
-      formData.append("llm_provider", llmProvider);
-      formData.append("llm_model", llmModel);
-      await onSubmit(formData);
-      resetForm();
-      return;
-    }
-
-    await onSubmit({
-      title,
-      source_type: sourceType,
-      raw_text: rawText,
-      url,
-      tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
-      llm_provider: llmProvider,
-      llm_model: llmModel,
-    });
-    resetForm();
-  }
+  // modelCatalog.providers is a Record<string, ProviderOption>
+  const providerIds = Object.keys(modelCatalog.providers);
+  const selectedProvider = provider ? modelCatalog.providers[provider] : null;
 
   return (
     <Card>
-      <form className="grid gap-4" onSubmit={handleSubmit}>
-        <div>
-          <label className="mb-1 block text-sm text-slate-300">Title</label>
-          <input className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm" value={title} onChange={(event) => setTitle(event.target.value)} required />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm text-slate-300">Source type</label>
-          <select className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm" value={sourceType} onChange={(event) => setSourceType(event.target.value)}>
-            <option value="text">Pasted text</option>
-            <option value="file">File</option>
-            <option value="url">URL</option>
-          </select>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm text-slate-300">Model provider</label>
-            <select
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
-              value={llmProvider}
-              onChange={(event) => {
-                const nextProvider = event.target.value;
-                setLlmProvider(nextProvider);
-                const nextModel = modelCatalog.providers[nextProvider]?.models.find((model) => model.recommended)?.id
-                  || modelCatalog.providers[nextProvider]?.models[0]?.id
-                  || "";
-                setLlmModel(nextModel);
-              }}
+      <Heading
+        size='md'
+        color='white'
+        mb='6'
+        display='flex'
+        alignItems='center'
+        gap='2'
+      >
+        <FileUp size={20} /> Ingest Knowledge
+      </Heading>
+
+      <form onSubmit={handleSubmit}>
+        <Stack gap='5'>
+          <Field.Root invalid={!brainId}>
+            <Field.Label color='slate.300'>
+              <Box as='span' display='flex' alignItems='center' gap='2'>
+                <Brain size={14} /> Knowledge Brain
+              </Box>
+            </Field.Label>
+            <NativeSelect.Root>
+              <NativeSelect.Field
+                bg='slate.950'
+                borderColor='slate.800'
+                value={brainId}
+                onChange={(e: any) => setBrainId(e.target.value)}
+              >
+                <option value=''>Select a brain</option>
+                {brains.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </NativeSelect.Field>
+            </NativeSelect.Root>
+          </Field.Root>
+
+          <Field.Root>
+            <Field.Label color='slate.300'>Source Type</Field.Label>
+            <NativeSelect.Root>
+              <NativeSelect.Field
+                bg='slate.950'
+                borderColor='slate.800'
+                value={sourceType}
+                onChange={(e: any) => setSourceType(e.target.value)}
+              >
+                <option value='file'>Local File</option>
+                <option value='url'>Remote URL</option>
+              </NativeSelect.Field>
+            </NativeSelect.Root>
+          </Field.Root>
+
+          {sourceType === 'url' ? (
+            <Field.Root invalid={!url}>
+              <Field.Label color='slate.300'>Document URL</Field.Label>
+              <Input
+                placeholder='https://example.com/doc.pdf'
+                bg='slate.950'
+                borderColor='slate.800'
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+              />
+            </Field.Root>
+          ) : (
+            <Field.Root invalid={!file}>
+              <Field.Label color='slate.300'>File</Field.Label>
+              <Input
+                type='file'
+                bg='slate.950'
+                borderColor='slate.800'
+                pt='1.5'
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              />
+            </Field.Root>
+          )}
+
+          <Box pt='2' borderTop='1px' borderColor='slate.800'>
+            <Text
+              fontSize='xs'
+              fontWeight='bold'
+              color='slate.500'
+              textTransform='uppercase'
+              mb='4'
+              display='flex'
+              alignItems='center'
+              gap='2'
             >
-              {Object.entries(providerOptions).map(([providerKey, provider]) => (
-                <option key={providerKey} value={providerKey}>
-                  {provider.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm text-slate-300">Model</label>
-            <select
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
-              value={llmModel}
-              onChange={(event) => setLlmModel(event.target.value)}
-            >
-              {modelsForProvider.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div className="rounded-md border border-slate-800 bg-slate-900 px-3 py-3 text-sm text-slate-400">
-          {modelsForProvider.find((model) => model.id === llmModel)?.notes || "Choose the model you want to use for extraction."}
-        </div>
-        {sourceType === "text" ? (
-          <div>
-            <label className="mb-1 block text-sm text-slate-300">Text</label>
-            <textarea className="min-h-48 w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm" value={rawText} onChange={(event) => setRawText(event.target.value)} />
-          </div>
-        ) : null}
-        {sourceType === "url" ? (
-          <div>
-            <label className="mb-1 block text-sm text-slate-300">URL</label>
-            <input className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm" value={url} onChange={(event) => setUrl(event.target.value)} />
-          </div>
-        ) : null}
-        {sourceType === "file" ? (
-          <div>
-            <label className="mb-1 block text-sm text-slate-300">File</label>
-            <input ref={fileInputRef} className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm" type="file" onChange={(event) => setFile(event.target.files?.[0] || null)} />
-          </div>
-        ) : null}
-        <div>
-          <label className="mb-1 block text-sm text-slate-300">Tags</label>
-          <input className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="demo, product, pricing" />
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Button disabled={submitDisabled} type="submit">
-            {loading ? "Submitting..." : ingestionActive ? "Ingestion in progress" : "Start ingestion"}
-          </Button>
+              <Settings2 size={12} /> Extraction Settings
+            </Text>
+
+            <Stack direction={{ base: 'column', md: 'row' }} gap='4'>
+              <Field.Root flex='1'>
+                <Field.Label fontSize='xs' color='slate.400'>
+                  LLM Provider
+                </Field.Label>
+                <NativeSelect.Root>
+                  <NativeSelect.Field
+                    bg='slate.950'
+                    borderColor='slate.800'
+                    value={provider}
+                    onChange={(e: any) => {
+                      setProvider(e.target.value);
+                      setModel('');
+                    }}
+                  >
+                    <option value=''>Select provider</option>
+                    {providerIds.map((pId) => (
+                      <option key={pId} value={pId}>
+                        {modelCatalog.providers[pId].label}
+                      </option>
+                    ))}
+                  </NativeSelect.Field>
+                </NativeSelect.Root>
+              </Field.Root>
+
+              <Field.Root flex='1'>
+                <Field.Label fontSize='xs' color='slate.400'>
+                  Intelligence Model
+                </Field.Label>
+                <NativeSelect.Root>
+                  <NativeSelect.Field
+                    bg='slate.950'
+                    borderColor='slate.800'
+                    value={model}
+                    // disabled={!provider}
+                    onChange={(e: any) => setModel(e.target.value)}
+                  >
+                    <option value=''>Select model</option>
+                    {selectedProvider?.models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </NativeSelect.Field>
+                </NativeSelect.Root>
+              </Field.Root>
+            </Stack>
+          </Box>
+
           <Button
-            className="bg-slate-700 text-white hover:bg-slate-600"
-            disabled={loading || isPristine}
-            onClick={resetForm}
-            type="button"
+            type='submit'
+            colorPalette='brand'
+            loading={loading}
+            disabled={
+              !brainId ||
+              !provider ||
+              !model ||
+              (sourceType === 'file' ? !file : !url) ||
+              ingestionActive
+            }
+            mt='2'
           >
-            Reset form
+            {ingestionActive ? 'Pipeline Busy' : 'Start Ingestion'}
           </Button>
-        </div>
+        </Stack>
       </form>
     </Card>
   );
