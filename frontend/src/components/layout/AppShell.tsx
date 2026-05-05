@@ -9,8 +9,10 @@ export function AppShell({ children }: PropsWithChildren) {
       <Sidebar />
       <Flex direction='column' flex='1' minW='0' overflow='hidden'>
         <Topbar />
-        <Box as='main' flex='1' overflowY='auto' p='6' minW='0'>
-          {children}
+        <Box as='main' flex='1' minH='0' overflow='hidden' minW='0'>
+          <Box h='full' minH='0'>
+            {children}
+          </Box>
         </Box>
       </Flex>
     </Flex>

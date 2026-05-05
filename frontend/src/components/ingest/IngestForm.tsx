@@ -9,10 +9,10 @@ import {
   Text,
   NativeSelect,
   Textarea,
+  Badge,
 } from '@chakra-ui/react';
-import { Brain, FileUp, Settings2 } from 'lucide-react';
+import { FileUp, Settings2 } from 'lucide-react';
 
-import { Brain as BrainType } from '../../api/brains';
 import { ModelCatalog } from '../../api/models';
 import type { DocumentIngestResponse } from '../../api/types';
 import { Card } from '../common/Card';
@@ -21,16 +21,17 @@ export function IngestForm({
   onSubmit,
   loading,
   ingestionActive,
+  activeBrainId,
+  activeBrainName,
   modelCatalog,
-  brains,
 }: {
   onSubmit: (payload: FormData) => Promise<DocumentIngestResponse>;
   loading: boolean;
   ingestionActive: boolean;
+  activeBrainId: string;
+  activeBrainName: string;
   modelCatalog: ModelCatalog;
-  brains: BrainType[];
 }) {
-  const [brainId, setBrainId] = useState('');
   const [sourceType, setSourceType] = useState('file');
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
@@ -38,12 +39,21 @@ export function IngestForm({
   const [provider, setProvider] = useState('google');
   const [model, setModel] = useState('gemini-3-flash-preview');
 
+  const handleReset = () => {
+    setTitle('');
+    setSourceType('file');
+    setUrl('');
+    setFile(null);
+    setProvider('google');
+    setModel('gemini-3-flash-preview');
+  };
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!brainId || !provider || !model) return;
+    if (!activeBrainId || !provider || !model) return;
 
     const formData = new FormData();
-    formData.append('brain', brainId);
+    formData.append('brain', activeBrainId);
     formData.append('title', title);
     formData.append('source_type', sourceType);
     formData.append('llm_provider', provider);
@@ -58,16 +68,12 @@ export function IngestForm({
     }
 
     await onSubmit(formData);
-    setTitle('');
-    setUrl('');
-    setFile(null);
+    handleReset();
   }
 
   // modelCatalog.providers is a Record<string, ProviderOption>
   const providerIds = Object.keys(modelCatalog.providers);
   const selectedProvider = provider ? modelCatalog.providers[provider] : null;
-  const handleBrainChange = (e: ChangeEvent<HTMLSelectElement>) =>
-    setBrainId(e.target.value);
   const handleSourceTypeChange = (e: ChangeEvent<HTMLSelectElement>) =>
     setSourceType(e.target.value);
   const handleProviderChange = (e: ChangeEvent<HTMLSelectElement>) => {
@@ -103,27 +109,17 @@ export function IngestForm({
             />
           </Field.Root>
 
-          <Field.Root invalid={!brainId}>
-            <Field.Label color='slate.300'>
-              <Box as='span' display='flex' alignItems='center' gap='2'>
-                <Brain size={14} /> Knowledge Brain
-              </Box>
-            </Field.Label>
-            <NativeSelect.Root>
-              <NativeSelect.Field
-                bg='slate.950'
-                borderColor='slate.800'
-                value={brainId}
-                onChange={handleBrainChange}
-              >
-                <option value=''>Select a brain</option>
-                {brains.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </NativeSelect.Field>
-            </NativeSelect.Root>
+          <Field.Root>
+            <Field.Label color='slate.300'>Knowledge Brain</Field.Label>
+            <Badge
+              colorPalette='cyan'
+              variant='subtle'
+              px='3'
+              py='2'
+              borderRadius='md'
+            >
+              {activeBrainName}
+            </Badge>
           </Field.Root>
 
           <Field.Root>
@@ -235,21 +231,33 @@ export function IngestForm({
             </Stack>
           </Box>
 
-          <Button
-            type='submit'
-            colorPalette='brand'
-            loading={loading}
-            disabled={
-              !brainId ||
-              !provider ||
-              !model ||
-              (sourceType === 'file' ? !file : !url) ||
-              ingestionActive
-            }
-            mt='2'
-          >
-            {ingestionActive ? 'Pipeline Busy' : 'Start Ingestion'}
-          </Button>
+          <Stack direction='row' gap='3' mt='2'>
+            <Button
+              type='submit'
+              colorPalette='brand'
+              flex='4'
+              loading={loading}
+              disabled={
+                !activeBrainId ||
+                !provider ||
+                !model ||
+                (sourceType === 'file' ? !file : !url) ||
+                ingestionActive
+              }
+            >
+              {ingestionActive ? 'Ingestion in Progress...' : 'Start Ingestion'}
+            </Button>
+            <Button
+              type='button'
+              variant='outline'
+              colorPalette='slate'
+              flex='1'
+              onClick={handleReset}
+              disabled={loading || ingestionActive}
+            >
+              Reset
+            </Button>
+          </Stack>
         </Stack>
       </form>
     </Card>

@@ -1,16 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { Box, Flex, Stack, Text } from '@chakra-ui/react';
 
 import { deleteDocument, listDocuments, retryDocument } from '../api/documents';
 import { DocumentList } from '../components/ingest/DocumentList';
+import { Card } from '../components/common/Card';
 import { LoadingState } from '../components/common/LoadingState';
+import { useActiveBrain } from '../context/useActiveBrain';
 
 export function DocumentsPage() {
+  const { activeBrainId } = useActiveBrain();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data, isLoading } = useQuery({
-    queryKey: ['documents'],
-    queryFn: listDocuments,
+    queryKey: ['documents', activeBrainId],
+    queryFn: () => listDocuments(activeBrainId || undefined),
   });
   const retryMutation = useMutation({
     mutationFn: retryDocument,
@@ -28,6 +32,27 @@ export function DocumentsPage() {
 
   if (isLoading || !data) return <LoadingState label='Loading documents...' />;
 
+  if (!data.length) {
+    return (
+      <Box p={6}>
+        <Card>
+          <Stack gap='2'>
+            <Text fontSize='sm' color='slate.300'>
+              {activeBrainId
+                ? 'No documents were found for the active brain.'
+                : 'No documents have been ingested yet.'}
+            </Text>
+            <Text fontSize='sm' color='slate.500'>
+              {activeBrainId
+                ? 'Try switching the active brain in the header or ingest new material into this brain.'
+                : 'Select a brain in the header to narrow the list, or ingest your first document.'}
+            </Text>
+          </Stack>
+        </Card>
+      </Box>
+    );
+  }
+
   const busyDocumentId = retryMutation.isPending
     ? Number(retryMutation.variables)
     : deleteMutation.isPending
@@ -35,15 +60,18 @@ export function DocumentsPage() {
       : null;
 
   return (
-    <DocumentList
-      documents={data}
-      onRetry={async (id) => {
-        await retryMutation.mutateAsync(id);
-      }}
-      onDelete={async (id) => {
-        await deleteMutation.mutateAsync(id);
-      }}
-      busyDocumentId={busyDocumentId}
-    />
+    <Flex h='full' p={6}>
+      <DocumentList
+        documents={data}
+        onRetry={async (id) => {
+          await retryMutation.mutateAsync(id);
+        }}
+        onDelete={async (id) => {
+          await deleteMutation.mutateAsync(id);
+        }}
+        busyDocumentId={busyDocumentId}
+        maxHeight='calc(100dvh - 220px)'
+      />
+    </Flex>
   );
 }
