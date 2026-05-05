@@ -102,6 +102,17 @@ def persist_retrieval_result(state: RetrievalState, answer_payload: dict[str, An
     payload = to_json_safe(state["answer_payload"])
     brain_id = state.get("brain_id")
 
+    top_chunks = state.get("top_chunks", [])
+    chunks_by_id = {chunk.id: chunk for chunk in top_chunks}
+    source_chunk_ids = [
+        chunk_id
+        for chunk_id in payload.get("source_chunk_ids", [])
+        if isinstance(chunk_id, int) and chunk_id in chunks_by_id
+    ]
+    selected_chunks = [chunks_by_id[chunk_id] for chunk_id in source_chunk_ids]
+    if not selected_chunks:
+        selected_chunks = top_chunks[:3]
+
     session = (
         ChatSession.objects.create(title=state["question"][:80], brain_id=brain_id)
         if not state.get("session_id")
@@ -115,7 +126,7 @@ def persist_retrieval_result(state: RetrievalState, answer_payload: dict[str, An
                 "chunk_id": chunk.id,
                 "snippet": chunk.text[:240],
             }
-            for chunk in state.get("top_chunks", [])
+            for chunk in selected_chunks
         ]
     )
     message_metadata = to_json_safe(
@@ -144,6 +155,7 @@ def persist_retrieval_result(state: RetrievalState, answer_payload: dict[str, An
             priority=2,
             title="Low-confidence answer detected",
             description="The system found weak coverage for a user question.",
+            brain_id=brain_id,
             payload=to_json_safe(
                 {
                     "question": state["question"],

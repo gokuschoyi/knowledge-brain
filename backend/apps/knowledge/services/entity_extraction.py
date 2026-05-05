@@ -82,9 +82,12 @@ def extract_entities_for_chunk(
         name = payload["name"].strip()
         if not name:
             continue
+        entity_brain = chunk.document.brain
         entity, _ = Entity.objects.get_or_create(
+            brain=entity_brain,
             name=name,
             defaults={
+                "brain": entity_brain,
                 "canonical_name": name,
                 "entity_type": payload.get("type", "concept"),
                 "description": payload.get("description", ""),

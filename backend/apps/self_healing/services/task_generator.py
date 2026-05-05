@@ -39,6 +39,7 @@ def generate_tasks_for_document(document: Document) -> list[SelfHealingTask]:
                     priority=3,
                     title=f"Merge duplicate entities around {canonical.name}",
                     description="Names or aliases look like the same concept.",
+                    brain=document.brain,
                     related_document=document,
                     related_entity=canonical,
                     payload={
@@ -67,6 +68,7 @@ def generate_tasks_for_document(document: Document) -> list[SelfHealingTask]:
                     priority=2,
                     title=f"Generate missing definition for {entity.name}",
                     description="This entity is referenced repeatedly but lacks a useful definition.",
+                    brain=document.brain,
                     related_document=document,
                     related_entity=entity,
                     payload={"entity_id": entity.id},
