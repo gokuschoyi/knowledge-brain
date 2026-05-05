@@ -1,5 +1,6 @@
 import { apiFetch } from './client';
+import type { GraphResponse } from './types';
 
 export function getGraph() {
-  return apiFetch<{ nodes: any[]; edges: any[] }>('/graph/');
+  return apiFetch<GraphResponse>('/graph/');
 }

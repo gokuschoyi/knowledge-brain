@@ -1,30 +1,15 @@
 import { apiFetch } from './client';
+import type {
+  Chunk,
+  DocumentEntity,
+  DocumentIngestResponse,
+  DocumentRelationship,
+  DocumentSummary,
+  IngestionJob,
+} from './types';
 
-export type Document = {
-  id: number;
-  title: string;
-  source_type: string;
-  tags: string[];
-  llm_provider: string;
-  llm_model: string;
-  status: string;
-  summary: string;
-  quality_score: number;
-  error_message: string;
-  created_at: string;
-  updated_at: string;
-  chunks_count: number;
-};
-
-export type IngestionJob = {
-  id: number;
-  document: number;
-  status: string;
-  current_step: string;
-  progress: number;
-  log: { step: string; message: string }[];
-  error_message: string;
-};
+export type Document = DocumentSummary;
+export type { IngestionJob };
 
 export function listDocuments() {
   return apiFetch<Document[]>('/documents/');
@@ -35,27 +20,24 @@ export function getDocument(id: string | number) {
 }
 
 export function getDocumentChunks(id: string | number) {
-  return apiFetch<any[]>(`/documents/${id}/chunks/`);
+  return apiFetch<Chunk[]>(`/documents/${id}/chunks/`);
 }
 
 export function getDocumentEntities(id: string | number) {
-  return apiFetch<any[]>(`/documents/${id}/entities/`);
+  return apiFetch<DocumentEntity[]>(`/documents/${id}/entities/`);
 }
 
 export function getDocumentRelationships(id: string | number) {
-  return apiFetch<any[]>(`/documents/${id}/relationships/`);
+  return apiFetch<DocumentRelationship[]>(`/documents/${id}/relationships/`);
 }
 
 export async function ingestDocument(
   payload: FormData | Record<string, unknown>,
 ) {
-  return apiFetch<{ document_id: number; job_id: number; status: string }>(
-    '/documents/ingest/',
-    {
-      method: 'POST',
-      body: payload instanceof FormData ? payload : JSON.stringify(payload),
-    },
-  );
+  return apiFetch<DocumentIngestResponse>('/documents/ingest/', {
+    method: 'POST',
+    body: payload instanceof FormData ? payload : JSON.stringify(payload),
+  });
 }
 
 export function getIngestionJob(id: number) {
@@ -63,12 +45,9 @@ export function getIngestionJob(id: number) {
 }
 
 export function retryDocument(id: string | number) {
-  return apiFetch<{ document_id: number; job_id: number; status: string }>(
-    `/documents/${id}/retry/`,
-    {
-      method: 'POST',
-    },
-  );
+  return apiFetch<DocumentIngestResponse>(`/documents/${id}/retry/`, {
+    method: 'POST',
+  });
 }
 
 export function deleteDocument(id: string | number) {

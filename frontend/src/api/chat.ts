@@ -1,29 +1,23 @@
 import { apiFetch, API_BASE_URL } from './client';
+import type { ChatResponse, ChatSession } from './types';
 
-export type ChatResponse = {
-  session_id: number;
-  answer: string;
-  confidence_score: number;
-  llm_provider?: string;
-  llm_model?: string;
-  sources: {
-    document_id: number;
-    document_title: string;
-    chunk_id: number;
-    snippet: string;
-  }[];
-  related_entities: { id: number; name: string; type: string }[];
-  knowledge_gaps: string[];
-  self_healing_task_created: boolean;
-};
+export type ChatStreamEvent =
+  | { type: 'status'; message: string }
+  | {
+      type: 'context';
+      payload: Pick<ChatResponse, 'confidence_score' | 'knowledge_gaps'>;
+    }
+  | { type: 'token'; delta: string }
+  | { type: 'final'; payload: ChatResponse }
+  | { type: 'error'; message: string };
 
 export async function queryChatStreaming(
   question: string,
   sessionId: number | null,
   brainId: string | null,
-  onUpdate: (type: string, data: any) => void,
+  onUpdate: (event: ChatStreamEvent) => void,
 ) {
-  const response = await fetch(`${API_BASE_URL}/chat/query/`, {
+  const response = await fetch(`${API_BASE_URL}/chat/query/stream/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -35,42 +29,45 @@ export async function queryChatStreaming(
     }),
   });
 
+  if (!response.ok) {
+    throw new Error(`Streaming chat request failed: ${response.status}`);
+  }
   if (!response.body) return;
+
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  let buffer = '';
 
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value);
-    const lines = chunk.split('\n');
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split('\n\n');
+    buffer = events.pop() || '';
+
+    for (const rawEvent of events) {
+      const lines = rawEvent.split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
         try {
-          const data = JSON.parse(line.substring(6));
-          onUpdate(data.type, data.payload || data.node);
+          const data = JSON.parse(line.substring(6)) as ChatStreamEvent;
+          onUpdate(data);
         } catch (e) {
           console.error('Error parsing SSE chunk', e);
         }
       }
     }
   }
+
+  if (buffer.trim().startsWith('data: ')) {
+    try {
+      onUpdate(JSON.parse(buffer.trim().substring(6)) as ChatStreamEvent);
+    } catch (e) {
+      console.error('Error parsing trailing SSE chunk', e);
+    }
+  }
 }
-
-export type ChatMessage = {
-  id: number;
-  role: 'user' | 'assistant';
-  content: string;
-  created_at: string;
-};
-
-export type ChatSession = {
-  id: number;
-  title: string;
-  created_at: string;
-  messages: ChatMessage[];
-};
 
 export function getChatSessions(brainId?: string) {
   const url = brainId
@@ -83,12 +80,17 @@ export function getChatSession(id: number) {
   return apiFetch<ChatSession>(`/chat/sessions/${id}/`);
 }
 
-export function queryChat(question: string, sessionId?: number | null) {
+export function queryChat(
+  question: string,
+  sessionId?: number | null,
+  brainId?: string | null,
+) {
   return apiFetch<ChatResponse>('/chat/query/', {
     method: 'POST',
     body: JSON.stringify({
       question,
       session_id: sessionId ?? null,
+      brain_id: brainId ?? null,
     }),
   });
 }
