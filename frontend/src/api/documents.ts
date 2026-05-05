@@ -11,8 +11,9 @@ import type {
 export type Document = DocumentSummary;
 export type { IngestionJob };
 
-export function listDocuments() {
-  return apiFetch<Document[]>('/documents/');
+export function listDocuments(brainId?: string) {
+  const search = brainId ? `?brain_id=${encodeURIComponent(brainId)}` : '';
+  return apiFetch<Document[]>(`/documents/${search}`);
 }
 
 export function getDocument(id: string | number) {

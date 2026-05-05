@@ -5,8 +5,11 @@ import type {
   SelfHealingTask,
 } from './types';
 
-export function listSelfHealingTasks() {
-  return apiFetch<SelfHealingTask[]>('/self-healing/tasks/');
+export function listSelfHealingTasks(brainId?: string) {
+  const url = brainId
+    ? `/self-healing/tasks/?brain_id=${brainId}`
+    : '/self-healing/tasks/';
+  return apiFetch<SelfHealingTask[]>(url);
 }
 
 export function runSelfHealingTask(id: number) {
@@ -21,8 +24,11 @@ export function ignoreSelfHealingTask(id: number) {
   });
 }
 
-export function runAllSelfHealingTasks() {
-  return apiFetch<SelfHealingRunAllResponse>('/self-healing/run-all/', {
+export function runAllSelfHealingTasks(brainId?: string | null) {
+  return apiFetch<SelfHealingRunAllResponse>('/self-healing/run/', {
     method: 'POST',
+    body: JSON.stringify({
+      brain_id: brainId ?? null,
+    }),
   });
 }

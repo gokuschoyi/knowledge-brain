@@ -9,6 +9,7 @@ export type DashboardMetrics = {
   average_quality_score: number;
 };
 
-export function getDashboard() {
-  return apiFetch<DashboardMetrics>('/dashboard/');
+export function getDashboard(brainId?: string) {
+  const search = brainId ? `?brain_id=${encodeURIComponent(brainId)}` : '';
+  return apiFetch<DashboardMetrics>(`/dashboard/${search}`);
 }

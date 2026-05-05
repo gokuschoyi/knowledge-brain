@@ -182,6 +182,7 @@ export type SelfHealingTaskStatus =
 
 export type SelfHealingTask = {
   id: number;
+  brain: string | null;
   task_type: string;
   status: SelfHealingTaskStatus;
   priority: number;
@@ -198,6 +199,7 @@ export type SelfHealingTask = {
   completed_at: string | null;
   related_entity_name?: string;
   related_document_title?: string;
+  brain_name?: string;
 };
 
 export type SelfHealingRunResponse = {
