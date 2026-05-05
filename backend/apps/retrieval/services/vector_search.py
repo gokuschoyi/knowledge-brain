@@ -15,12 +15,17 @@ def _keyword_score(question: str, chunk_text: str) -> float:
     return len(question_terms & chunk_terms) / len(question_terms)
 
 
-def search_chunks(question: str, limit: int = 8) -> list[dict]:
+def search_chunks(question: str, brain_id: str | None = None, limit: int = 15) -> list[dict]:
     query_embedding, embedding_metadata = embed_text(question, input_type="query")
     embedding_provider = embedding_metadata["embedding_provider"]
     embedding_model = embedding_metadata["embedding_model"]
     scored = []
-    for chunk in Chunk.objects.select_related("document").all():
+    
+    queryset = Chunk.objects.select_related("document")
+    if brain_id:
+        queryset = queryset.filter(document__brain_id=brain_id)
+
+    for chunk in queryset.all():
         if chunk.embedding is None:
             continue
         chunk_provider = chunk.metadata.get("embedding_provider")

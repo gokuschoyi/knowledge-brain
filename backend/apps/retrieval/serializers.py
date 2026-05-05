@@ -6,6 +6,7 @@ from apps.knowledge.models import ChatMessage, ChatSession
 
 class ChatQuerySerializer(serializers.Serializer):
     session_id = serializers.IntegerField(required=False, allow_null=True)
+    brain_id = serializers.UUIDField(required=False, allow_null=True)
     question = serializers.CharField()
     llm_provider = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     llm_model = serializers.CharField(required=False, allow_blank=True, allow_null=True)

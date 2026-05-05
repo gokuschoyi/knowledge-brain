@@ -14,6 +14,22 @@ from apps.knowledge.models import Entity, Relationship
 from apps.self_healing.models import SelfHealingTask
 
 
+from rest_framework import generics
+from .models import Brain
+from .serializers import BrainSerializer
+
+from rest_framework import generics
+from .models import Brain
+from .serializers import BrainSerializer
+
+class BrainListCreateView(generics.ListCreateAPIView):
+    queryset = Brain.objects.all()
+    serializer_class = BrainSerializer
+
+class BrainDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Brain.objects.all()
+    serializer_class = BrainSerializer
+
 class DashboardView(APIView):
     def get(self, request):
         average_quality = Document.objects.aggregate(avg=Avg("quality_score")).get("avg") or 0

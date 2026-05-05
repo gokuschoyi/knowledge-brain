@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from typing import Any, TypedDict
 
 from django.db import transaction
@@ -8,7 +9,11 @@ from langgraph.graph import END, START, StateGraph
 
 from apps.core.utils import to_json_safe
 from apps.knowledge.models import ChatMessage, ChatSession
-from apps.retrieval.services.answer_generator import synthesize_answer_payload
+from apps.retrieval.services.answer_generator import (
+    build_answer_payload,
+    stream_answer_text,
+    synthesize_answer_payload,
+)
 from apps.retrieval.services.confidence import calculate_confidence
 from apps.retrieval.services.graph_search import expand_graph
 from apps.retrieval.services.query_classifier import classify_query
@@ -20,6 +25,7 @@ from apps.self_healing.models import SelfHealingTask
 class RetrievalState(TypedDict, total=False):
     question: str
     session_id: int | None
+    brain_id: str | None
     llm_provider: str | None
     llm_model: str | None
     intent: str
@@ -37,13 +43,14 @@ def classify_question(state: RetrievalState) -> RetrievalState:
 
 
 def retrieve_chunks(state: RetrievalState) -> RetrievalState:
-    results = rerank_results(search_chunks(state["question"]))
-    top_chunks = [result["chunk"] for result in results[:4]]
+    results = rerank_results(search_chunks(state["question"], brain_id=state.get("brain_id")))
+    # With smaller 400-token chunks, we can provide 8 chunks to the LLM (approx 3200 tokens)
+    top_chunks = [result["chunk"] for result in results[:8]]
     return {"results": results, "top_chunks": top_chunks}
 
 
 def expand_graph_context(state: RetrievalState) -> RetrievalState:
-    return {"graph_context": expand_graph(state["question"])}
+    return {"graph_context": expand_graph(state["question"], brain_id=state.get("brain_id"))}
 
 
 def assess_gaps(state: RetrievalState) -> RetrievalState:
@@ -90,10 +97,13 @@ def synthesize_answer(state: RetrievalState) -> RetrievalState:
     return {"answer_payload": payload}
 
 
-def persist_chat_and_tasks(state: RetrievalState) -> RetrievalState:
+def persist_retrieval_result(state: RetrievalState, answer_payload: dict[str, Any]) -> dict[str, Any]:
+    state = {**state, "answer_payload": answer_payload}
     payload = to_json_safe(state["answer_payload"])
+    brain_id = state.get("brain_id")
+
     session = (
-        ChatSession.objects.create(title=state["question"][:80])
+        ChatSession.objects.create(title=state["question"][:80], brain_id=brain_id)
         if not state.get("session_id")
         else ChatSession.objects.get(id=state["session_id"])
     )
@@ -160,7 +170,77 @@ def persist_chat_and_tasks(state: RetrievalState) -> RetrievalState:
             }
         )
     )
-    return {"answer_payload": payload, "persisted_session_id": session.id}
+    return payload
+
+
+def persist_chat_and_tasks(state: RetrievalState) -> RetrievalState:
+    payload = persist_retrieval_result(state, state["answer_payload"])
+    return {"answer_payload": payload, "persisted_session_id": payload["session_id"]}
+
+
+def run_retrieval_state(
+    question: str,
+    session_id: int | None = None,
+    brain_id: str | None = None,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+) -> RetrievalState:
+    state: RetrievalState = {
+        "question": question,
+        "session_id": session_id,
+        "brain_id": brain_id,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+    }
+    for step in (classify_question, retrieve_chunks, expand_graph_context, assess_gaps):
+        state.update(step(state))
+    return state
+
+
+def stream_question_answer(
+    question: str,
+    session_id: int | None = None,
+    brain_id: str | None = None,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+) -> Iterator[dict[str, Any]]:
+    state = run_retrieval_state(
+        question=question,
+        session_id=session_id,
+        brain_id=brain_id,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+    )
+    yield {
+        "type": "context",
+        "payload": {
+            "confidence_score": state["confidence"],
+            "knowledge_gaps": state["gaps"],
+        },
+    }
+
+    graph_context = state["graph_context"]
+    answer_parts: list[str] = []
+    for token in stream_answer_text(
+        question=state["question"],
+        top_chunks=state.get("top_chunks", []),
+        relationships=graph_context.get("relationships", []),
+        knowledge_gaps=state["gaps"],
+        llm_provider=state.get("llm_provider"),
+        llm_model=state.get("llm_model"),
+    ):
+        answer_parts.append(token)
+        yield {"type": "token", "delta": token}
+
+    payload = build_answer_payload(
+        answer_text="".join(answer_parts).strip(),
+        fallback_confidence=state["confidence"],
+        source_chunk_ids=[chunk.id for chunk in state.get("top_chunks", [])],
+        related_entity_ids=[entity.id for entity in graph_context.get("entities", [])[:6]],
+        knowledge_gaps=state["gaps"],
+    )
+    final_payload = persist_retrieval_result(state, payload)
+    yield {"type": "final", "payload": final_payload}
 
 
 def build_retrieval_graph():
@@ -187,6 +267,7 @@ RETRIEVAL_GRAPH = build_retrieval_graph()
 def answer_question(
     question: str,
     session_id: int | None = None,
+    brain_id: str | None = None,
     llm_provider: str | None = None,
     llm_model: str | None = None,
 ) -> dict:
@@ -194,6 +275,7 @@ def answer_question(
         {
             "question": question,
             "session_id": session_id,
+            "brain_id": brain_id,
             "llm_provider": llm_provider,
             "llm_model": llm_model,
         }
@@ -201,4 +283,11 @@ def answer_question(
     return state["answer_payload"]
 
 
-__all__ = ["answer_question", "RETRIEVAL_GRAPH", "build_retrieval_graph"]
+__all__ = [
+    "answer_question",
+    "build_retrieval_graph",
+    "persist_retrieval_result",
+    "RETRIEVAL_GRAPH",
+    "run_retrieval_state",
+    "stream_question_answer",
+]
