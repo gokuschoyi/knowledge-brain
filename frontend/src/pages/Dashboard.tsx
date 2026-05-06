@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Box, Grid, Heading, SimpleGrid, Stack, Text } from '@chakra-ui/react';
+import { Grid, Heading, SimpleGrid, Stack, Text } from '@chakra-ui/react';
 
 import { getBrains } from '../api/brains';
 import { getDashboard } from '../api/dashboard';
@@ -37,24 +37,6 @@ export function DashboardPage() {
   return (
     <Stack gap={6} p={6}>
       <Grid templateColumns={{ base: '1fr', xl: '1.2fr 0.8fr' }} gap={6}>
-        <Card>
-          <Stack gap='3'>
-            <Box>
-              <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
-                Dashboard scope
-              </Text>
-              <Heading size='lg' mt='2' color='white'>
-                {activeBrain ? activeBrain.name : 'All brains'}
-              </Heading>
-            </Box>
-            <Text fontSize='sm' color='slate.400'>
-              {activeBrain
-                ? activeBrain.description ||
-                  'Showing metrics for the selected brain.'
-                : 'Showing rolled-up metrics across every brain in the workspace.'}
-            </Text>
-          </Stack>
-        </Card>
         <Card>
           <Stack gap='2'>
             <Text fontSize='xs' color='slate.500' textTransform='uppercase'>

@@ -246,12 +246,14 @@ export function ChatPage() {
 
   if (!activeBrain) {
     return (
-      <Card>
-        <Text fontSize='sm' color='slate.400'>
-          Select an active brain in the header to start chatting with its
-          knowledge.
-        </Text>
-      </Card>
+      <Box p={6}>
+        <Card>
+          <Text fontSize='sm' color='slate.400'>
+            Select an active brain in the header to start chatting with its
+            knowledge.
+          </Text>
+        </Card>
+      </Box>
     );
   }
 

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Stack, Text } from '@chakra-ui/react';
+import { Box, Stack, Text } from '@chakra-ui/react';
 
 import { getBrains } from '../api/brains';
 import { getGraph } from '../api/graph';
@@ -30,11 +30,13 @@ export function KnowledgeGraphPage() {
 
   if (!activeBrain) {
     return (
-      <Card>
-        <Text fontSize='sm' color='slate.400'>
-          Select an active brain in the header to load its knowledge graph.
-        </Text>
-      </Card>
+      <Box p={6}>
+        <Card>
+          <Text fontSize='sm' color='slate.400'>
+            Select an active brain in the header to load its knowledge graph.
+          </Text>
+        </Card>
+      </Box>
     );
   }
 

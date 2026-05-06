@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Grid, Heading, Stack, Text, VStack } from '@chakra-ui/react';
+import { Box, Grid, Heading, Stack, Text, VStack } from '@chakra-ui/react';
 
 import {
   getIngestionJob,
@@ -68,17 +68,19 @@ export function IngestPage() {
 
   if (!activeBrain) {
     return (
-      <Card>
-        <Stack gap='3'>
-          <Heading size='sm' color='white'>
-            Select an active brain
-          </Heading>
-          <Text fontSize='sm' color='slate.400'>
-            Choose a brain from the header before ingesting documents. The
-            active brain controls where new knowledge is stored.
-          </Text>
-        </Stack>
-      </Card>
+      <Box p={6}>
+        <Card>
+          <Stack gap='3'>
+            <Heading size='sm' color='white'>
+              Select an active brain
+            </Heading>
+            <Text fontSize='sm' color='slate.400'>
+              Choose a brain from the header before ingesting documents. The
+              active brain controls where new knowledge is stored.
+            </Text>
+          </Stack>
+        </Card>
+      </Box>
     );
   }
 
