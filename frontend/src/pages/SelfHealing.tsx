@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Flex, Grid, Heading, Stack, Text } from '@chakra-ui/react';
+import { Box, Grid, Heading, Stack, Text, Portal } from '@chakra-ui/react';
+import { Play } from 'lucide-react';
 
 import {
   ignoreSelfHealingTask,
@@ -16,9 +17,21 @@ import { RepairResultPanel } from '../components/selfHealing/RepairResultPanel';
 import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { useActiveBrain } from '../context/useActiveBrain';
+import { Tooltip } from '../components/ui/tooltip';
+import {
+  DialogBody,
+  DialogCloseTrigger,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogRoot,
+  DialogTitle,
+  DialogActionTrigger,
+} from '../components/ui/dialog';
 
 export function SelfHealingPage() {
   const { activeBrainId } = useActiveBrain();
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [selectionState, setSelectionState] = useState<{
     brainId: string;
     selectedTaskId: number | null;
@@ -48,8 +61,10 @@ export function SelfHealingPage() {
   });
   const runAllMutation = useMutation({
     mutationFn: () => runAllSelfHealingTasks(activeBrainId || null),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['self-healing'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['self-healing'] });
+      setIsConfirmDialogOpen(false);
+    },
   });
   const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
   const selectedTaskId =
@@ -104,30 +119,13 @@ export function SelfHealingPage() {
     );
 
   return (
-    <Stack gap='6' h='full' minH='0' p={6}>
-      <Flex align='flex-start' justify='space-between' gap='4' wrap='wrap'>
-        <Box>
-          <Heading size='lg' color='white'>
-            Self Healing
-          </Heading>
-          <Text fontSize='sm' color='slate.400'>
-            Review repair work for {activeBrain.name} and run only the fixes you
-            trust.
-          </Text>
-        </Box>
-        <Flex gap='3' wrap='wrap'>
-          <Button
-            onClick={() => runAllMutation.mutate()}
-            loading={runAllMutation.isPending}
-            disabled={!summary.pending}
-          >
-            Run all pending
-          </Button>
-        </Flex>
-      </Flex>
-
-      <Grid templateColumns={{ base: '1fr 1fr', xl: 'repeat(4, 1fr)' }} gap='4'>
-        <Card>
+    <Stack gap='6' pb={6} h='full' minH='0' position='relative'>
+      <Grid
+        p={6}
+        templateColumns={{ base: '1fr 1fr', xl: 'repeat(4, 1fr)' }}
+        gap='4'
+      >
+        <Card px={4} py={3}>
           <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
             Pending
           </Text>
@@ -135,7 +133,7 @@ export function SelfHealingPage() {
             {summary.pending}
           </Heading>
         </Card>
-        <Card>
+        <Card px={4} py={3}>
           <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
             Running
           </Text>
@@ -143,7 +141,7 @@ export function SelfHealingPage() {
             {summary.running}
           </Heading>
         </Card>
-        <Card>
+        <Card px={4} py={3}>
           <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
             Completed
           </Text>
@@ -151,7 +149,7 @@ export function SelfHealingPage() {
             {summary.completed}
           </Heading>
         </Card>
-        <Card>
+        <Card px={4} py={3}>
           <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
             Failed
           </Text>
@@ -185,10 +183,66 @@ export function SelfHealingPage() {
             }}
           />
         </Box>
-        <Box minH='0' overflowY='auto' pr='1'>
+        <Box minH='0' overflowY='auto' pr='6'>
           <RepairResultPanel task={selectedTask} />
         </Box>
       </Grid>
+
+      {/* Floating Action Button */}
+      <Portal>
+        <Box position='fixed' bottom='8' right='8' zIndex='1000'>
+          <Tooltip content='Run all pending repair tasks' showArrow>
+            <Button
+              size='lg'
+              height='14'
+              width='14'
+              rounded='full'
+              boxShadow='0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)'
+              onClick={() => setIsConfirmDialogOpen(true)}
+              bg='brand.500'
+              disabled={!summary.pending}
+              _hover={{ bg: 'brand.400', transform: 'scale(1.05)' }}
+              transition='all 0.2s'
+            >
+              <Play size={24} color='white' />
+            </Button>
+          </Tooltip>
+        </Box>
+      </Portal>
+
+      {/* Confirmation Dialog */}
+      <DialogRoot
+        open={isConfirmDialogOpen}
+        onOpenChange={(details) => setIsConfirmDialogOpen(details.open)}
+        size='sm'
+        placement='center'
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle color='white'>Confirm Repair Action</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <Text color='slate.300'>
+              Are you sure you want to run all{' '}
+              <strong>{summary.pending}</strong> pending self-healing tasks for{' '}
+              <strong>{activeBrain.name}</strong>?
+            </Text>
+          </DialogBody>
+          <DialogFooter gap='3'>
+            <DialogActionTrigger asChild>
+              <Button variant='outline'>Cancel</Button>
+            </DialogActionTrigger>
+            <Button
+              onClick={() => runAllMutation.mutate()}
+              loading={runAllMutation.isPending}
+              bg='brand.500'
+            >
+              Run fixes
+            </Button>
+          </DialogFooter>
+          <DialogCloseTrigger />
+        </DialogContent>
+      </DialogRoot>
     </Stack>
   );
 }

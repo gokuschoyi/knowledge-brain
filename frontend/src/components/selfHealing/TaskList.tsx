@@ -44,7 +44,7 @@ export function TaskList({
   ].filter((section) => section.tasks.length > 0);
 
   return (
-    <Stack gap={6}>
+    <Stack gap={6} pl={6} pb={2}>
       {sections.map((section) => (
         <Stack key={section.key} gap={3}>
           <Stack gap={1}>
