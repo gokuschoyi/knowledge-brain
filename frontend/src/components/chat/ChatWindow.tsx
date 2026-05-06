@@ -1,4 +1,11 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import {
+  FormEvent,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+} from 'react';
 import {
   Box,
   Flex,
@@ -35,6 +42,14 @@ export function ChatWindow({
   const [question, setQuestion] = useState('');
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
+  // Memoize the callback to prevent child re-renders
+  const handleAssistantMessageSelect = useCallback(
+    (id: number) => {
+      onAssistantMessageSelect(id);
+    },
+    [onAssistantMessageSelect],
+  );
+
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
@@ -48,6 +63,27 @@ export function ChatWindow({
     setQuestion('');
     await onSubmit(currentQuestion);
   }
+
+  // Memoize the list of static messages
+  const renderedMessages = useMemo(() => {
+    return messages.map((message) => (
+      <MessageBubble
+        key={message.id}
+        role={message.role}
+        content={message.content}
+        active={
+          message.role === 'assistant' &&
+          message.id === selectedAssistantMessageId
+        }
+        confidenceScore={message.confidence_score}
+        onClick={
+          message.role === 'assistant'
+            ? () => handleAssistantMessageSelect(message.id)
+            : undefined
+        }
+      />
+    ));
+  }, [messages, selectedAssistantMessageId, handleAssistantMessageSelect]);
 
   return (
     <Card
@@ -77,22 +113,7 @@ export function ChatWindow({
             </Flex>
           )}
 
-          {messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              role={message.role}
-              content={message.content}
-              active={
-                message.role === 'assistant' &&
-                message.id === selectedAssistantMessageId
-              }
-              onClick={
-                message.role === 'assistant'
-                  ? () => onAssistantMessageSelect(message.id)
-                  : undefined
-              }
-            />
-          ))}
+          {renderedMessages}
 
           {pendingQuestion ? (
             <MessageBubble role='user' content={pendingQuestion} />
