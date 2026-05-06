@@ -68,7 +68,7 @@ export function DocumentDetailPage() {
   const doc = docQuery.data;
 
   return (
-    <Stack gap='6' align='stretch'>
+    <Stack gap='6' align='stretch' h='full' minH='0' p={6}>
       <Card>
         <Flex align='flex-start' justify='space-between' gap='4'>
           <Box>
@@ -138,12 +138,19 @@ export function DocumentDetailPage() {
         )}
       </Card>
 
-      <SimpleGrid columns={{ base: 1, xl: 3 }} gap='6'>
-        <Card>
+      <SimpleGrid columns={{ base: 1, xl: 3 }} gap='6' flex='1' minH='0'>
+        <Card display='flex' flexDirection='column' minH='0'>
           <Heading size='sm' color='white' mb='4'>
             Chunks
           </Heading>
-          <Stack gap='3' align='stretch'>
+          <Stack
+            gap='3'
+            align='stretch'
+            flex='1'
+            minH='0'
+            overflowY='auto'
+            pr='1'
+          >
             {chunksQuery.data?.map((chunk) => (
               <Box
                 key={chunk.id}
@@ -161,11 +168,18 @@ export function DocumentDetailPage() {
           </Stack>
         </Card>
 
-        <Card>
+        <Card display='flex' flexDirection='column' minH='0'>
           <Heading size='sm' color='white' mb='4'>
             Entities
           </Heading>
-          <Stack gap='2' align='stretch'>
+          <Stack
+            gap='2'
+            align='stretch'
+            flex='1'
+            minH='0'
+            overflowY='auto'
+            pr='1'
+          >
             {entitiesQuery.data?.map((entity) => (
               <Flex
                 key={entity.id}
@@ -183,11 +197,18 @@ export function DocumentDetailPage() {
           </Stack>
         </Card>
 
-        <Card>
+        <Card display='flex' flexDirection='column' minH='0'>
           <Heading size='sm' color='white' mb='4'>
             Relationships
           </Heading>
-          <Stack gap='2' align='stretch'>
+          <Stack
+            gap='2'
+            align='stretch'
+            flex='1'
+            minH='0'
+            overflowY='auto'
+            pr='1'
+          >
             {relationshipsQuery.data?.map((relationship) => (
               <Box
                 key={relationship.id}

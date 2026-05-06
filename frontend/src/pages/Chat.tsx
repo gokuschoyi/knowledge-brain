@@ -327,7 +327,7 @@ export function ChatPage() {
                       justifyContent='flex-start'
                       variant='ghost'
                       h='auto'
-                      py='3'
+                      py='2'
                       px='3'
                       bg={isActive ? 'slate.800' : 'transparent'}
                       borderWidth='1px'
@@ -341,7 +341,7 @@ export function ChatPage() {
                         });
                       }}
                     >
-                      <Stack gap='1' align='flex-start'>
+                      <Stack gap='1' align='flex-start' textAlign={'start'}>
                         <Text fontSize='sm' color='white' lineClamp={2}>
                           {session.title || 'Untitled conversation'}
                         </Text>
