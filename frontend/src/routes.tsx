@@ -15,14 +15,49 @@ export const router = createBrowserRouter([
     path: '/',
     element: <App />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: 'brains', element: <BrainsPage /> },
-      { path: 'documents', element: <DocumentsPage /> },
-      { path: 'documents/:id', element: <DocumentDetailPage /> },
-      { path: 'chat', element: <ChatPage /> },
-      { path: 'ingest', element: <IngestPage /> },
-      { path: 'graph', element: <KnowledgeGraphPage /> },
-      { path: 'self-healing', element: <SelfHealingPage /> },
+      {
+        index: true,
+        element: <DashboardPage />,
+        handle: { title: 'Dashboard' },
+      },
+      {
+        path: 'brains',
+        element: <BrainsPage />,
+        handle: {
+          title: 'Knowledge Brains',
+          subtitle: 'Manage your isolated knowledge containers',
+        },
+      },
+      {
+        path: 'documents',
+        element: <DocumentsPage />,
+        handle: { title: 'Documents' },
+      },
+      {
+        path: 'documents/:id',
+        element: <DocumentDetailPage />,
+        handle: { title: 'Document Detail' },
+      },
+      {
+        path: 'chat',
+        element: <ChatPage />,
+        handle: { title: 'Chat' },
+      },
+      {
+        path: 'ingest',
+        element: <IngestPage />,
+        handle: { title: 'Ingest Data' },
+      },
+      {
+        path: 'graph',
+        element: <KnowledgeGraphPage />,
+        handle: { title: 'Knowledge Graph' },
+      },
+      {
+        path: 'self-healing',
+        element: <SelfHealingPage />,
+        handle: { title: 'Self Healing' },
+      },
     ],
   },
 ]);
