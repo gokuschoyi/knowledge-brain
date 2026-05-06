@@ -159,6 +159,7 @@ def persist_retrieval_result(state: RetrievalState, answer_payload: dict[str, An
             payload=to_json_safe(
                 {
                     "question": state["question"],
+                    "answer": payload["answer"],
                     "confidence_score": payload["confidence_score"],
                     "top_chunk_ids": payload.get("source_chunk_ids", []),
                     "knowledge_gaps": payload.get("knowledge_gaps", []),
