@@ -6,6 +6,7 @@
 
 html,
 body {
+  font-family: "Open Sans", sans-serif;
   background: #020617; /* slate.950 */
   color: #f1f5f9; /* slate.100 */
   margin: 0;
