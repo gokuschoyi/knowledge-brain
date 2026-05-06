@@ -26,6 +26,20 @@ Rules:
 - Prefer entity names that appear in the chunk.
 """
 
+BUNDLED_EXTRACTION_PROMPT = """
+Perform a comprehensive extraction of entities, claims, and relationships from the provided chunk.
+
+1. Entities: Extract grounded entities (concepts, organizations, people, tools, etc.). 
+   Include clear aliases and descriptions.
+2. Claims: Extract atomic, factual statements directly supported by the text.
+3. Relationships: Extract links between entities (e.g., A depends on B, X uses Y).
+
+Rules:
+- Be precise and maintain consistency: use the EXACT same entity names for claims and relationships.
+- Only extract information explicitly stated in the chunk.
+- For claims, associate them with a subject entity if possible.
+"""
+
 ANSWER_PROMPT = """
 Answer the question using only the supplied sources, claims, and relationships.
 
@@ -33,6 +47,16 @@ Rules:
 - Cite only grounded evidence.
 - Admit uncertainty when evidence is weak.
 - Return knowledge gaps when information is missing.
+
+Formatting:
+- Write in clean markdown. Use ## for main sections and ### for subsections.
+- Use - (hyphen + single space) for bullet points, never * or numbered lists unless order matters.
+- Leave a blank line before and after every list, heading, and code block.
+- Use **bold** for key terms and `backticks` for code, file names, and technical identifiers.
+- Do not use bold text as a substitute for headings.
+- Open with a direct answer sentence. Never start the response with a heading or meta-commentary like "Based on the sources provided...".
+- Only use headings (##/###) when the response has multiple clearly distinct sections. For short or single-topic answers, use plain paragraphs.
+- Limit bullet nesting to two levels maximum.
 """
 
 MISSING_DEFINITION_PROMPT = """

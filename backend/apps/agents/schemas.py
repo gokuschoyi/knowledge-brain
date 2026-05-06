@@ -36,6 +36,12 @@ class RelationshipExtractionResponse(BaseModel):
     relationships: list[ExtractedRelationship] = Field(default_factory=list)
 
 
+class BundledExtractionResponse(BaseModel):
+    entities: list[ExtractedEntity] = Field(default_factory=list)
+    claims: list[ExtractedClaim] = Field(default_factory=list)
+    relationships: list[ExtractedRelationship] = Field(default_factory=list)
+
+
 class AnswerResponse(BaseModel):
     answer: str
     confidence_score: float = Field(ge=0.0, le=1.0)
