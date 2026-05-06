@@ -12,6 +12,7 @@ import {
   Textarea,
   SimpleGrid,
   Flex,
+  Portal,
 } from '@chakra-ui/react';
 import {
   getBrains,
@@ -24,10 +25,20 @@ import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
 import { LoadingState } from '../components/common/LoadingState';
 import { Field } from '../components/ui/field';
+import {
+  DialogBody,
+  DialogCloseTrigger,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogRoot,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Tooltip } from '../components/ui/tooltip';
 
 export function BrainsPage() {
   const queryClient = useQueryClient();
-  const [isAdding, setIsAdding] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', description: '' });
 
@@ -40,7 +51,7 @@ export function BrainsPage() {
     mutationFn: () => createBrain(formData.name, formData.description),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brains'] });
-      setIsAdding(false);
+      setIsDialogOpen(false);
       setFormData({ name: '', description: '' });
     },
   });
@@ -51,6 +62,7 @@ export function BrainsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brains'] });
       setEditingId(null);
+      setIsDialogOpen(false);
       setFormData({ name: '', description: '' });
     },
   });
@@ -65,10 +77,17 @@ export function BrainsPage() {
   const handleEdit = (brain: Brain) => {
     setEditingId(brain.id);
     setFormData({ name: brain.name, description: brain.description });
+    setIsDialogOpen(true);
+  };
+
+  const handleAdd = () => {
+    setEditingId(null);
+    setFormData({ name: '', description: '' });
+    setIsDialogOpen(true);
   };
 
   const handleCancel = () => {
-    setIsAdding(false);
+    setIsDialogOpen(false);
     setEditingId(null);
     setFormData({ name: '', description: '' });
   };
@@ -84,76 +103,7 @@ export function BrainsPage() {
   if (isLoading) return <LoadingState label='Loading knowledge brains...' />;
 
   return (
-    <Stack gap='6' h='full' minH='0'>
-      <Flex align='center' justify='space-between' p='6'>
-        <Box>
-          <Heading size='xl' color='white'>
-            Knowledge Brains
-          </Heading>
-          <Text color='slate.400'>
-            Manage your isolated knowledge containers
-          </Text>
-        </Box>
-        <Button
-          onClick={() => setIsAdding(true)}
-          loading={createMutation.isPending}
-        >
-          <HStack gap='2'>
-            <Plus size={16} />
-            <Text>Create Brain</Text>
-          </HStack>
-        </Button>
-      </Flex>
-
-      {(isAdding || editingId) && (
-        <Card border='1px solid' borderColor='brand.500/30' bg='brand.900/10'>
-          <Stack gap='4'>
-            <Heading size='md' color='white'>
-              {isAdding ? 'Create New Brain' : 'Edit Brain'}
-            </Heading>
-            <Stack gap='4'>
-              <Field label='Name'>
-                <Input
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder='Marketing Docs, Project X...'
-                  bg='slate.950'
-                  borderColor='slate.700'
-                />
-              </Field>
-              <Field label='Description'>
-                <Textarea
-                  rows={3}
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder='Specify what kind of knowledge this brain handles...'
-                  bg='slate.950'
-                  borderColor='slate.700'
-                />
-              </Field>
-            </Stack>
-            <HStack justify='flex-end' gap='3'>
-              <Button variant='outline' onClick={handleCancel}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSubmit}
-                loading={createMutation.isPending || updateMutation.isPending}
-              >
-                <HStack gap='2'>
-                  <Save size={16} />
-                  <Text>Save Brain</Text>
-                </HStack>
-              </Button>
-            </HStack>
-          </Stack>
-        </Card>
-      )}
-
+    <Stack gap='6' h='full' minH='0' p='6' position='relative'>
       <Flex
         flexDirection={'column'}
         gap={6}
@@ -188,7 +138,10 @@ export function BrainsPage() {
                       size='sm'
                       colorPalette='red'
                       onClick={() => deleteMutation.mutate(brain.id)}
-                      loading={deleteMutation.isPending}
+                      loading={
+                        deleteMutation.isPending &&
+                        deleteMutation.variables === brain.id
+                      }
                       px='2'
                     >
                       <Trash2 size={14} />
@@ -203,6 +156,87 @@ export function BrainsPage() {
           ))}
         </SimpleGrid>
       </Flex>
+
+      {/* Floating Action Button */}
+      <Portal>
+        <Box position='fixed' bottom='8' right='8' zIndex='1000'>
+          <Tooltip content='Create a new knowledge brain' showArrow>
+            <Button
+              size='lg'
+              height='14'
+              width='14'
+              rounded='full'
+              boxShadow='0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)'
+              onClick={handleAdd}
+              bg='brand.500'
+              _hover={{ bg: 'brand.400', transform: 'scale(1.05)' }}
+              transition='all 0.2s'
+            >
+              <Plus size={24} color='white' />
+            </Button>
+          </Tooltip>
+        </Box>
+      </Portal>
+
+      <DialogRoot
+        open={isDialogOpen}
+        onOpenChange={(details) => !details.open && handleCancel()}
+        size='md'
+        placement='center'
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle color='white'>
+              {editingId
+                ? 'Edit Knowledge Brain'
+                : 'Create New Knowledge Brain'}
+            </DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <Stack gap='4'>
+              <Field label='Name'>
+                <Input
+                  autoFocus
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  placeholder='Marketing Docs, Project X...'
+                  bg='slate.950'
+                  borderColor='slate.700'
+                />
+              </Field>
+              <Field label='Description'>
+                <Textarea
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
+                  placeholder='Specify what kind of knowledge this brain handles...'
+                  bg='slate.950'
+                  borderColor='slate.700'
+                />
+              </Field>
+            </Stack>
+          </DialogBody>
+          <DialogFooter gap='3'>
+            <Button variant='outline' onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              loading={createMutation.isPending || updateMutation.isPending}
+            >
+              <HStack gap='2'>
+                <Save size={16} />
+                <Text>Save Brain</Text>
+              </HStack>
+            </Button>
+          </DialogFooter>
+          <DialogCloseTrigger />
+        </DialogContent>
+      </DialogRoot>
     </Stack>
   );
 }
