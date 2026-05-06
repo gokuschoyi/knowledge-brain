@@ -16,3 +16,4 @@ postgres_data/
 .agents/
 .codex/
 tsconfig.tsbuildinfo
+docs/
