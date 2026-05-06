@@ -118,7 +118,7 @@ def stream_answer_text(
             ):
                 text = _coerce_stream_text(getattr(chunk, "content", ""))
                 if text:
-                    yield text
+                    yield text.replace("\\n", "\n").replace("\\t", "\t")
             return
         except Exception:
             pass
@@ -155,6 +155,7 @@ def synthesize_answer_payload(
                 )
             )
             payload = response.model_dump()
+            payload["answer"] = payload["answer"].replace("\\n", "\n").replace("\\t", "\t")
             payload["source_chunk_ids"] = payload.get("source_chunk_ids") or source_chunk_ids
             payload["related_entity_ids"] = payload.get("related_entity_ids") or related_entity_ids
             return payload
