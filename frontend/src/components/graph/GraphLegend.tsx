@@ -3,7 +3,14 @@ import { Card } from '../common/Card';
 
 export function GraphLegend({ activeBrainName }: { activeBrainName?: string }) {
   return (
-    <Card display={'flex'} flexDirection={'row'} gap={6} alignItems={'center'}>
+    <Card
+      display={'flex'}
+      flexDirection={'row'}
+      gap={6}
+      alignItems={'center'}
+      px={6}
+      py={2}
+    >
       <Box display='flex' flexDirection='column' gap={0}>
         <Heading size='xs' color='white' mb={1}>
           Legend

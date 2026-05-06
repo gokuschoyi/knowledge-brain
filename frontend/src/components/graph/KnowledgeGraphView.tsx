@@ -240,6 +240,8 @@ export function KnowledgeGraphView({ graph }: { graph: GraphResponse }) {
             fitView
             fitViewOptions={{ padding: 0.16 }}
             style={{ width: '100%', height: '100%' }}
+            minZoom={0.1}
+            maxZoom={1}
           >
             <Background color='#334155' gap={20} />
             <Controls />

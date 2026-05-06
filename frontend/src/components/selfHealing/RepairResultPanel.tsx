@@ -77,6 +77,28 @@ export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
           </Box>
         ) : null}
 
+        {task.payload && task.payload.question && (
+          <Box mb='4'>
+            <Heading size='xs' color='blue.300' mb='1'>
+              Question
+            </Heading>
+            <Text fontSize='sm' color='white'>
+              {String(task.payload.question)}
+            </Text>
+          </Box>
+        )}
+
+        {task.payload && task.payload.answer && (
+          <Box mb='4'>
+            <Heading size='xs' color='green.300' mb='1'>
+              Original Reply
+            </Heading>
+            <Text fontSize='sm' color='slate.200'>
+              {String(task.payload.answer)}
+            </Text>
+          </Box>
+        )}
+
         {task.payload && Object.keys(task.payload).length > 0 ? (
           <Box>
             <Heading size='xs' color='white' mb='2'>
