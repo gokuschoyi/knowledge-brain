@@ -1,16 +1,94 @@
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Box, Stack, Text } from '@chakra-ui/react';
+import { Badge, Box, HStack, Stack, Text } from '@chakra-ui/react';
 
 import { getBrains } from '../api/brains';
+import type { GraphNode, GraphResponse } from '../api/types';
 import { getGraph } from '../api/graph';
+import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
-import { GraphLegend } from '../components/graph/GraphLegend';
-import { KnowledgeGraphView } from '../components/graph/KnowledgeGraphView';
+import { EmptyState } from '../components/common/EmptyState';
+import { ElkKnowledgeGraphView } from '../components/graph/ElkKnowledgeGraphView';
+// import { GraphLegend } from '../components/graph/GraphLegend';
+import { IsolatedEntitiesPanel } from '../components/graph/IsolatedEntitiesPanel';
 import { LoadingState } from '../components/common/LoadingState';
 import { useActiveBrain } from '../context/useActiveBrain';
 
+type GraphTab = 'graph' | 'isolated';
+
+function partitionGraph(graph: GraphResponse) {
+  const entityNodes = graph.nodes.filter((node) => node.type === 'entity');
+  const entityNodeIds = new Set(entityNodes.map((node) => node.id));
+  const validEdges = graph.edges.filter(
+    (edge) => entityNodeIds.has(edge.source) && entityNodeIds.has(edge.target),
+  );
+  const connectedNodeIds = new Set<string>();
+
+  validEdges.forEach((edge) => {
+    connectedNodeIds.add(edge.source);
+    connectedNodeIds.add(edge.target);
+  });
+
+  const connectedNodes = entityNodes.filter((node) =>
+    connectedNodeIds.has(node.id),
+  );
+  const isolatedEntities = entityNodes.filter(
+    (node) => !connectedNodeIds.has(node.id),
+  );
+
+  return {
+    connectedGraph: {
+      nodes: connectedNodes,
+      edges: validEdges.filter(
+        (edge) =>
+          connectedNodeIds.has(edge.source) &&
+          connectedNodeIds.has(edge.target),
+      ),
+    },
+    isolatedEntities,
+  };
+}
+
+function TabButton({
+  active,
+  count,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  count: number;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      variant={active ? 'solid' : 'outline'}
+      onClick={onClick}
+      borderColor={active ? undefined : 'slate.700'}
+      color={active ? undefined : 'slate.200'}
+      bg={active ? 'brand.500' : 'slate.900'}
+      _hover={{
+        bg: active ? 'brand.400' : 'slate.800',
+      }}
+    >
+      <HStack gap='2'>
+        <Text>{label}</Text>
+        <Badge
+          bg={active ? 'rgba(255,255,255,0.18)' : 'slate.800'}
+          color={active ? 'white' : 'slate.300'}
+          borderRadius='full'
+          px='2'
+        >
+          {count}
+        </Badge>
+      </HStack>
+    </Button>
+  );
+}
+
 export function KnowledgeGraphPage() {
   const { activeBrainId } = useActiveBrain();
+  const [tab, setTab] = useState<GraphTab>('graph');
   const brainsQuery = useQuery({
     queryKey: ['brains'],
     queryFn: getBrains,
@@ -20,6 +98,17 @@ export function KnowledgeGraphPage() {
     queryFn: () => getGraph(activeBrainId || undefined),
     enabled: !!activeBrainId,
   });
+
+  const partitioned = useMemo(
+    () =>
+      data
+        ? partitionGraph(data)
+        : {
+            connectedGraph: { nodes: [] as GraphNode[], edges: [] },
+            isolatedEntities: [] as GraphNode[],
+          },
+    [data],
+  );
 
   if (brainsQuery.isLoading) {
     return <LoadingState label='Loading brains...' />;
@@ -45,9 +134,58 @@ export function KnowledgeGraphPage() {
       {isLoading || !data ? (
         <LoadingState label='Loading graph...' />
       ) : (
-        <KnowledgeGraphView graph={data} />
+        <>
+          <Card py={3}>
+            <Stack
+              direction={{ base: 'column', md: 'row' }}
+              gap='4'
+              align={{ base: 'stretch', md: 'center' }}
+              justify='space-between'
+            >
+              <Box>
+                <Text fontSize='sm' color='slate.300'>
+                  The main graph only shows entities that participate in at
+                  least one relationship.
+                </Text>
+                <Text mt='1' fontSize='xs' color='slate.500'>
+                  Isolated entities are kept in a separate review view so the
+                  graph stays readable.
+                </Text>
+              </Box>
+              <HStack gap='3' wrap='wrap'>
+                <TabButton
+                  active={tab === 'graph'}
+                  label='Graph'
+                  count={partitioned.connectedGraph.nodes.length}
+                  onClick={() => setTab('graph')}
+                />
+                <TabButton
+                  active={tab === 'isolated'}
+                  label='Isolated Entities'
+                  count={partitioned.isolatedEntities.length}
+                  onClick={() => setTab('isolated')}
+                />
+              </HStack>
+            </Stack>
+          </Card>
+
+          {tab === 'graph' ? (
+            <>
+              {partitioned.connectedGraph.nodes.length > 0 ? (
+                <ElkKnowledgeGraphView graph={partitioned.connectedGraph} />
+              ) : (
+                <EmptyState
+                  title='No connected entities yet'
+                  body='This brain has extracted entities, but none of them are linked by relationships yet.'
+                />
+              )}
+              {/* <GraphLegend activeBrainName={activeBrain.name} /> */}
+            </>
+          ) : (
+            <IsolatedEntitiesPanel entities={partitioned.isolatedEntities} />
+          )}
+        </>
       )}
-      <GraphLegend activeBrainName={activeBrain.name} />
     </Stack>
   );
 }

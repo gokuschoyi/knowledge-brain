@@ -15,6 +15,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@tanstack/react-query": "^5.59.0",
+    "elkjs": "^0.11.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^0.453.0",
     "next-themes": "^0.4.6",
