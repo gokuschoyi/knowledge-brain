@@ -1,6 +1,19 @@
-import { Box, Code, Heading, Stack, Text } from '@chakra-ui/react';
+import {
+  Badge,
+  Box,
+  Code,
+  Heading,
+  HStack,
+  Stack,
+  Text,
+} from '@chakra-ui/react';
 import type { SelfHealingTask } from '../../api/types';
 import { Card } from '../common/Card';
+import {
+  getRepairTypeMeta,
+  REPAIR_IMPACT_LABELS,
+  type RepairImpactKind,
+} from './taskTypeMeta';
 
 export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
   if (!task) {
@@ -17,6 +30,15 @@ export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
     );
   }
 
+  const repairMeta = getRepairTypeMeta(task.task_type);
+  const impactPalette: Record<RepairImpactKind, string> = {
+    graph_structure: 'cyan',
+    entity_metadata: 'purple',
+    advisory_only: 'blue',
+    review_only: 'orange',
+    unimplemented: 'gray',
+  };
+
   return (
     <Card>
       <Stack gap='4'>
@@ -27,6 +49,28 @@ export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
           <Text fontSize='sm' color='slate.400'>
             {task.description}
           </Text>
+        </Box>
+
+        <Box>
+          <Heading size='xs' color='white' mb='2'>
+            What this repair changes
+          </Heading>
+          <Text fontSize='sm' color='slate.300'>
+            {repairMeta.summary}
+          </Text>
+          {repairMeta.impacts.length > 0 ? (
+            <HStack mt='3' gap='2' wrap='wrap'>
+              {repairMeta.impacts.map((impact) => (
+                <Badge
+                  key={impact}
+                  colorPalette={impactPalette[impact]}
+                  variant='subtle'
+                >
+                  {REPAIR_IMPACT_LABELS[impact]}
+                </Badge>
+              ))}
+            </HStack>
+          ) : null}
         </Box>
 
         <Stack gap='2' fontSize='sm' color='slate.300'>

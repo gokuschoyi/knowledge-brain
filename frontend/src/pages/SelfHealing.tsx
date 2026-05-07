@@ -1,7 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Grid, Heading, Stack, Text, Portal } from '@chakra-ui/react';
-import { Play } from 'lucide-react';
+import {
+  Box,
+  Grid,
+  Heading,
+  Stack,
+  Text,
+  Portal,
+  Flex,
+} from '@chakra-ui/react';
+import { Filter, Play, X } from 'lucide-react';
 
 import {
   ignoreSelfHealingTask,
@@ -28,10 +36,15 @@ import {
   DialogTitle,
   DialogActionTrigger,
 } from '../components/ui/dialog';
+import type { SelfHealingTask } from '../api/types';
 
 export function SelfHealingPage() {
   const { activeBrainId } = useActiveBrain();
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [activePolledTaskIds, setActivePolledTaskIds] = useState<number[]>([]);
+  const [activeTaskTypeFilter, setActiveTaskTypeFilter] = useState<
+    string | null
+  >(null);
   const [selectionState, setSelectionState] = useState<{
     brainId: string;
     selectedTaskId: number | null;
@@ -48,11 +61,25 @@ export function SelfHealingPage() {
     queryKey: ['self-healing', activeBrainId],
     queryFn: () => listSelfHealingTasks(activeBrainId || undefined),
     enabled: !!activeBrainId,
+    refetchInterval: (query) => {
+      const data = query.state.data as SelfHealingTask[];
+      if (!data) return false;
+      const hasRunning = data.some(
+        (t) => t.status === 'running' || activePolledTaskIds.includes(t.id),
+      );
+      return hasRunning ? 2000 : false;
+    },
   });
   const runMutation = useMutation({
     mutationFn: runSelfHealingTask,
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ['self-healing'] }),
+    onSuccess: (response) => {
+      setActivePolledTaskIds((current) =>
+        current.includes(response.task_id)
+          ? current
+          : [...current, response.task_id],
+      );
+      queryClient.invalidateQueries({ queryKey: ['self-healing'] });
+    },
   });
   const ignoreMutation = useMutation({
     mutationFn: ignoreSelfHealingTask,
@@ -61,12 +88,40 @@ export function SelfHealingPage() {
   });
   const runAllMutation = useMutation({
     mutationFn: () => runAllSelfHealingTasks(activeBrainId || null),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      setActivePolledTaskIds((current) => {
+        const merged = new Set(current);
+        response.queued_task_ids.forEach((id) => merged.add(id));
+        return Array.from(merged);
+      });
       queryClient.invalidateQueries({ queryKey: ['self-healing'] });
       setIsConfirmDialogOpen(false);
     },
   });
-  const tasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
+
+  const rawTasks = useMemo(() => tasksQuery.data ?? [], [tasksQuery.data]);
+
+  const taskTypes = useMemo(() => {
+    const types = new Set(rawTasks.map((t) => t.task_type));
+    return Array.from(types).sort();
+  }, [rawTasks]);
+
+  const tasks = useMemo(() => {
+    let filtered = rawTasks;
+    if (activeTaskTypeFilter) {
+      filtered = filtered.filter((t) => t.task_type === activeTaskTypeFilter);
+    }
+
+    return [...filtered].sort((a, b) => {
+      if (b.priority !== a.priority) {
+        return b.priority - a.priority;
+      }
+      return (
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    });
+  }, [rawTasks, activeTaskTypeFilter]);
+
   const selectedTaskId =
     selectionState.brainId === activeBrainId
       ? selectionState.selectedTaskId
@@ -88,6 +143,37 @@ export function SelfHealingPage() {
     }),
     [tasks],
   );
+
+  const activeTaskIdSet = useMemo(
+    () => new Set(activePolledTaskIds),
+    [activePolledTaskIds],
+  );
+
+  const finishedTaskIds = useMemo(() => {
+    if (!activePolledTaskIds.length) return new Set<number>();
+    return new Set(
+      rawTasks
+        .filter(
+          (task) =>
+            activeTaskIdSet.has(task.id) &&
+            (task.status === 'completed' ||
+              task.status === 'failed' ||
+              task.status === 'ignored'),
+        )
+        .map((task) => task.id),
+    );
+  }, [activeTaskIdSet, rawTasks, activePolledTaskIds.length]);
+
+  if (activeBrainId !== selectionState.brainId) {
+    setSelectionState({ brainId: activeBrainId, selectedTaskId: null });
+    setActivePolledTaskIds([]);
+  }
+
+  if (finishedTaskIds.size > 0) {
+    setActivePolledTaskIds((current) =>
+      current.filter((id) => !finishedTaskIds.has(id)),
+    );
+  }
 
   if (brainsQuery.isLoading || tasksQuery.isLoading)
     return <LoadingState label='Loading repair tasks...' />;
@@ -158,6 +244,62 @@ export function SelfHealingPage() {
           </Heading>
         </Card>
       </Grid>
+
+      {taskTypes.length > 0 && (
+        <Flex px={6} gap='2' wrap='wrap' align='center'>
+          <Flex align='center' gap='2' mr='2'>
+            <Filter size={14} color='#64748b' />
+            <Text
+              fontSize='xs'
+              fontWeight='bold'
+              color='slate.500'
+              textTransform='uppercase'
+              letterSpacing='wider'
+            >
+              Filter by type
+            </Text>
+          </Flex>
+
+          <Button
+            size='xs'
+            variant={activeTaskTypeFilter === null ? 'solid' : 'ghost'}
+            onClick={() => setActiveTaskTypeFilter(null)}
+            rounded='full'
+            px='3'
+          >
+            All
+          </Button>
+
+          {taskTypes.map((type) => (
+            <Button
+              key={type}
+              size='xs'
+              variant={activeTaskTypeFilter === type ? 'solid' : 'ghost'}
+              onClick={() => setActiveTaskTypeFilter(type)}
+              rounded='full'
+              px='3'
+              textTransform='capitalize'
+            >
+              {type.split('_').join(' ')}
+            </Button>
+          ))}
+
+          {activeTaskTypeFilter && (
+            <Tooltip content='Clear filter'>
+              <Box
+                as='button'
+                onClick={() => setActiveTaskTypeFilter(null)}
+                p='1'
+                rounded='full'
+                _hover={{ bg: 'whiteAlpha.100' }}
+                color='slate.400'
+              >
+                <X size={14} />
+              </Box>
+            </Tooltip>
+          )}
+        </Flex>
+      )}
 
       <Grid
         templateColumns={{ base: '1fr', xl: 'minmax(0, 1.2fr) 380px' }}

@@ -10,6 +10,11 @@ import {
 import type { SelfHealingTask } from '../../api/types';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
+import {
+  getRepairTypeMeta,
+  REPAIR_IMPACT_LABELS,
+  type RepairImpactKind,
+} from './taskTypeMeta';
 
 export function TaskCard({
   task,
@@ -34,6 +39,14 @@ export function TaskCard({
           : task.status === 'failed'
             ? 'red'
             : 'gray';
+  const repairMeta = getRepairTypeMeta(task.task_type);
+  const impactPalette: Record<RepairImpactKind, string> = {
+    graph_structure: 'cyan',
+    entity_metadata: 'purple',
+    advisory_only: 'blue',
+    review_only: 'orange',
+    unimplemented: 'gray',
+  };
 
   return (
     <Card
@@ -63,6 +76,21 @@ export function TaskCard({
           </Text>
           <Text>·</Text>
           <Text>Priority {task.priority}</Text>
+          {task.payload.confidence_score !== undefined && (
+            <>
+              <Text>·</Text>
+              <Text
+                color={
+                  Number(task.payload.confidence_score) < 0.6
+                    ? 'orange.400'
+                    : 'slate.500'
+                }
+              >
+                Confidence{' '}
+                {(Number(task.payload.confidence_score) * 100).toFixed(0)}%
+              </Text>
+            </>
+          )}
           {task.brain_name ? (
             <>
               <Text>·</Text>
@@ -82,6 +110,15 @@ export function TaskCard({
               Entity: {task.related_entity_name}
             </Badge>
           ) : null}
+          {repairMeta.impacts.map((impact) => (
+            <Badge
+              key={impact}
+              colorPalette={impactPalette[impact]}
+              variant='subtle'
+            >
+              {REPAIR_IMPACT_LABELS[impact]}
+            </Badge>
+          ))}
         </HStack>
       </Stack>
 
