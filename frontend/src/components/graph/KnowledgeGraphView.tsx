@@ -125,14 +125,18 @@ export function KnowledgeGraphView({ graph }: { graph: GraphResponse }) {
       };
     }
 
-    const outgoingEdges = new Map<
+    const adjacency = new Map<
       string,
       Array<{ nodeId: string; edgeId: string }>
     >();
     layoutedEdges.forEach((edge) => {
-      const children = outgoingEdges.get(edge.source) ?? [];
-      children.push({ nodeId: edge.target, edgeId: edge.id });
-      outgoingEdges.set(edge.source, children);
+      const sourceNeighbors = adjacency.get(edge.source) ?? [];
+      sourceNeighbors.push({ nodeId: edge.target, edgeId: edge.id });
+      adjacency.set(edge.source, sourceNeighbors);
+
+      const targetNeighbors = adjacency.get(edge.target) ?? [];
+      targetNeighbors.push({ nodeId: edge.source, edgeId: edge.id });
+      adjacency.set(edge.target, targetNeighbors);
     });
 
     const nodeIds = new Set<string>([selectedNodeId]);
@@ -143,8 +147,8 @@ export function KnowledgeGraphView({ graph }: { graph: GraphResponse }) {
       const currentNodeId = queue.shift();
       if (!currentNodeId) continue;
 
-      const children = outgoingEdges.get(currentNodeId) ?? [];
-      children.forEach(({ nodeId, edgeId }) => {
+      const neighbors = adjacency.get(currentNodeId) ?? [];
+      neighbors.forEach(({ nodeId, edgeId }) => {
         edgeIds.add(edgeId);
         if (!nodeIds.has(nodeId)) {
           nodeIds.add(nodeId);
