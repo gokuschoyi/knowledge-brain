@@ -25,22 +25,11 @@ export function GraphLegend({ activeBrainName }: { activeBrainName?: string }) {
             w='3'
             h='3'
             borderRadius='full'
-            border='1px solid #0891b2'
-            bg='linear-gradient(180deg, rgba(8, 145, 178, 0.24) 0%, rgba(12, 74, 110, 0.34) 100%)'
-            boxShadow='0 4px 12px rgba(8, 145, 178, 0.18)'
-          />
-          <Text>Docs = sources</Text>
-        </HStack>
-        <HStack gap='2'>
-          <Box
-            w='3'
-            h='3'
-            borderRadius='full'
             border='1px solid #7c3aed'
             bg='linear-gradient(180deg, rgba(109, 40, 217, 0.22) 0%, rgba(49, 46, 129, 0.3) 100%)'
             boxShadow='0 4px 12px rgba(76, 29, 149, 0.2)'
           />
-          <Text>Entities = concepts</Text>
+          <Text>Nodes = connected entities</Text>
         </HStack>
         <HStack gap='2'>
           <Box w='5' h='0' borderTop='2px solid #64748b' position='relative'>
@@ -55,7 +44,7 @@ export function GraphLegend({ activeBrainName }: { activeBrainName?: string }) {
               borderLeft='6px solid #64748b'
             />
           </Box>
-          <Text>Edges = links</Text>
+          <Text>Edges = relationships</Text>
         </HStack>
       </HStack>
     </Card>
