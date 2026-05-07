@@ -5,7 +5,12 @@ from rest_framework.views import APIView
 from apps.documents.models import Document
 from apps.documents.serializers import DocumentSerializer
 from apps.knowledge.models import Claim, Entity, Relationship
-from apps.knowledge.serializers import ClaimSerializer, EntitySerializer, RelationshipSerializer
+from apps.knowledge.serializers import (
+    ClaimSerializer,
+    EntitySerializer,
+    GraphEntitySerializer,
+    RelationshipSerializer,
+)
 
 
 class GraphView(APIView):
@@ -39,7 +44,7 @@ class GraphView(APIView):
                     "id": f"entity-{entity.id}",
                     "type": "entity",
                     "label": entity.name,
-                    "data": EntitySerializer(entity).data,
+                    "data": GraphEntitySerializer(entity).data,
                 }
             )
 
