@@ -2,8 +2,6 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.documents.models import Document
-from apps.documents.serializers import DocumentSerializer
 from apps.knowledge.models import Claim, Entity, Relationship
 from apps.knowledge.serializers import (
     ClaimSerializer,
@@ -16,39 +14,19 @@ from apps.knowledge.serializers import (
 class GraphView(APIView):
     def get(self, request):
         brain_id = request.query_params.get("brain_id")
-        nodes = []
-        edges = []
-
-        document_qs = Document.objects.all()
         entity_qs = Entity.objects.all()
         relationship_qs = Relationship.objects.select_related("source_entity", "target_entity")
 
         if brain_id:
-            document_qs = document_qs.filter(brain_id=brain_id)
             entity_qs = entity_qs.filter(mentions__chunk__document__brain_id=brain_id).distinct()
             relationship_qs = relationship_qs.filter(evidence_chunk__document__brain_id=brain_id).distinct()
 
-        for document in document_qs:
-            nodes.append(
-                {
-                    "id": f"document-{document.id}",
-                    "type": "document",
-                    "label": document.title,
-                    "data": DocumentSerializer(document).data,
-                }
-            )
-
-        for entity in entity_qs:
-            nodes.append(
-                {
-                    "id": f"entity-{entity.id}",
-                    "type": "entity",
-                    "label": entity.name,
-                    "data": GraphEntitySerializer(entity).data,
-                }
-            )
+        connected_entity_ids: set[int] = set()
+        edges = []
 
         for relationship in relationship_qs:
+            connected_entity_ids.add(relationship.source_entity_id)
+            connected_entity_ids.add(relationship.target_entity_id)
             edges.append(
                 {
                     "id": f"rel-{relationship.id}",
@@ -62,7 +40,30 @@ class GraphView(APIView):
                 }
             )
 
-        return Response({"nodes": nodes, "edges": edges})
+        connected_nodes = []
+        isolated_entities = []
+
+        for entity in entity_qs:
+            node = {
+                "id": f"entity-{entity.id}",
+                "type": "entity",
+                "label": entity.name,
+                "data": GraphEntitySerializer(entity).data,
+            }
+            if entity.id in connected_entity_ids:
+                connected_nodes.append(node)
+            else:
+                isolated_entities.append(node)
+
+        return Response(
+            {
+                "connected_graph": {
+                    "nodes": connected_nodes,
+                    "edges": edges,
+                },
+                "isolated_entities": isolated_entities,
+            }
+        )
 
 
 class EntityListView(generics.ListAPIView):

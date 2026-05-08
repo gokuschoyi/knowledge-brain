@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Badge, Box, HStack, Stack, Text } from '@chakra-ui/react';
 
 import { getBrains } from '../api/brains';
-import type { GraphNode, GraphResponse } from '../api/types';
+import type { GraphNode } from '../api/types';
 import { getGraph } from '../api/graph';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
@@ -16,39 +16,6 @@ import { LoadingState } from '../components/common/LoadingState';
 import { useActiveBrain } from '../context/useActiveBrain';
 
 type GraphTab = 'graph' | 'isolated';
-
-function partitionGraph(graph: GraphResponse) {
-  const entityNodes = graph.nodes.filter((node) => node.type === 'entity');
-  const entityNodeIds = new Set(entityNodes.map((node) => node.id));
-  const validEdges = graph.edges.filter(
-    (edge) => entityNodeIds.has(edge.source) && entityNodeIds.has(edge.target),
-  );
-  const connectedNodeIds = new Set<string>();
-
-  validEdges.forEach((edge) => {
-    connectedNodeIds.add(edge.source);
-    connectedNodeIds.add(edge.target);
-  });
-
-  const connectedNodes = entityNodes.filter((node) =>
-    connectedNodeIds.has(node.id),
-  );
-  const isolatedEntities = entityNodes.filter(
-    (node) => !connectedNodeIds.has(node.id),
-  );
-
-  return {
-    connectedGraph: {
-      nodes: connectedNodes,
-      edges: validEdges.filter(
-        (edge) =>
-          connectedNodeIds.has(edge.source) &&
-          connectedNodeIds.has(edge.target),
-      ),
-    },
-    isolatedEntities,
-  };
-}
 
 function TabButton({
   active,
@@ -103,7 +70,10 @@ export function KnowledgeGraphPage() {
   const partitioned = useMemo(
     () =>
       data
-        ? partitionGraph(data)
+        ? {
+            connectedGraph: data.connected_graph,
+            isolatedEntities: data.isolated_entities,
+          }
         : {
             connectedGraph: { nodes: [] as GraphNode[], edges: [] },
             isolatedEntities: [] as GraphNode[],

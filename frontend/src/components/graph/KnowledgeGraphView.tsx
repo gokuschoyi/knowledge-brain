@@ -106,6 +106,10 @@ function getLayoutedGraph(graph: GraphResponse) {
       fill: '#64748b',
       fontSize: 11,
     },
+    labelBgStyle: {
+      fill: 'rgba(15, 23, 42, 0.88)',
+      fillOpacity: 1,
+    },
   }));
 
   return { nodes, edges };
@@ -167,7 +171,7 @@ export function KnowledgeGraphView({ graph }: { graph: GraphResponse }) {
         ...node,
         style: {
           ...node.style,
-          opacity: isConnected ? 1 : 0.78,
+          opacity: isConnected ? 1 : 0.28,
           border: isSelected ? '1px solid #e2e8f0' : node.style?.border,
           boxShadow: isSelected
             ? '0 0 0 2px rgba(248, 250, 252, 0.9), 0 12px 32px rgba(14, 165, 233, 0.22)'
@@ -190,7 +194,7 @@ export function KnowledgeGraphView({ graph }: { graph: GraphResponse }) {
         animated: isConnected,
         style: {
           ...edge.style,
-          opacity: isConnected ? 1 : 0.55,
+          opacity: isConnected ? 1 : 0.14,
           stroke: isConnected ? '#38bdf8' : '#475569',
           strokeWidth: isConnected ? 2.2 : 1.15,
         },
@@ -201,8 +205,15 @@ export function KnowledgeGraphView({ graph }: { graph: GraphResponse }) {
         labelStyle: {
           ...edge.labelStyle,
           fill: isConnected ? '#94a3b8' : '#475569',
-          opacity: isConnected ? 1 : 0.72,
+          opacity: isConnected ? 1 : 0.22,
           fontWeight: isConnected ? 600 : 400,
+        },
+        labelBgStyle: {
+          ...edge.labelBgStyle,
+          fill: isConnected
+            ? 'rgba(15, 23, 42, 0.88)'
+            : 'rgba(15, 23, 42, 0.2)',
+          fillOpacity: isConnected ? 1 : 0.2,
         },
       };
     });
