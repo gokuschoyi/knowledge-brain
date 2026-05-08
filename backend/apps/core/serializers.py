@@ -10,6 +10,7 @@ class BrainSerializer(serializers.ModelSerializer):
             'description',
             'auto_repair_enabled',
             'auto_repair_safe_only',
+            'auto_repair_allowed_types',
             'auto_repair_frequency_minutes',
             'last_auto_repair_at',
             'created_at',

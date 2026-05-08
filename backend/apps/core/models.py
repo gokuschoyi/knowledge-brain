@@ -7,6 +7,7 @@ class Brain(models.Model):
     description = models.TextField(blank=True, null=True)
     auto_repair_enabled = models.BooleanField(default=False)
     auto_repair_safe_only = models.BooleanField(default=True)
+    auto_repair_allowed_types = models.JSONField(default=list, blank=True)
     auto_repair_frequency_minutes = models.PositiveIntegerField(default=60)
     last_auto_repair_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

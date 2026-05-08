@@ -9,6 +9,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
+        ("core", "0000_enable_pgvector"),
     ]
 
     operations = [
