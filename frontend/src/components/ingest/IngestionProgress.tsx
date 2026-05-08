@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import {
   Badge,
   Box,
+  Button,
   Flex,
   Grid,
   Progress,
@@ -34,15 +36,30 @@ const chunkPalette: Record<IngestionChunkDetail['status'], string> = {
   failed: 'red',
 };
 
-export function IngestionProgress({ job }: { job: IngestionJob | null }) {
+interface IngestionProgressProps {
+  job: IngestionJob | null;
+  onRetryChunk?: (chunkId: number) => void;
+}
+
+export function IngestionProgress({
+  job,
+  onRetryChunk,
+}: IngestionProgressProps) {
+  const [retrying, setRetrying] = useState<Set<number>>(new Set());
+
   if (!job) return null;
 
   const failedChunks = job.chunk_details.filter(
     (chunk) => chunk.status === 'failed',
   );
 
+  const handleRetry = (chunkId: number) => {
+    setRetrying((prev) => new Set(prev).add(chunkId));
+    onRetryChunk?.(chunkId);
+  };
+
   return (
-    <Card display='flex' flexDirection='column' minH='400px' maxH='560px'>
+    <Card display='flex' flexDirection='column' minH='420px' maxH='560px'>
       <Flex mb='3' align='center' justify='space-between'>
         <Box>
           <Text fontSize='sm' fontWeight='semibold' color='white'>
@@ -158,12 +175,38 @@ export function IngestionProgress({ job }: { job: IngestionJob | null }) {
                       p='2'
                       bg='red.950/20'
                     >
-                      <Text fontSize='sm' color='red.200' fontWeight='semibold'>
-                        Chunk {chunk.chunk_index + 1}
-                      </Text>
-                      <Text fontSize='xs' color='slate.300'>
-                        {chunk.error_message || 'Chunk extraction failed.'}
-                      </Text>
+                      <Flex justify='space-between' align='center'>
+                        <Box flex='1' minW='0'>
+                          <Text
+                            fontSize='sm'
+                            color='red.200'
+                            fontWeight='semibold'
+                          >
+                            Chunk {chunk.chunk_index + 1}
+                          </Text>
+                          <Text fontSize='xs' color='slate.300'>
+                            {chunk.error_message || 'Chunk extraction failed.'}
+                          </Text>
+                          {chunk.attempt_count > 1 && (
+                            <Text fontSize='xs' color='slate.500' mt='1'>
+                              Attempt {chunk.attempt_count}
+                            </Text>
+                          )}
+                        </Box>
+                        {onRetryChunk && (
+                          <Button
+                            size='xs'
+                            variant='outline'
+                            colorPalette='red'
+                            ml='3'
+                            flexShrink={0}
+                            loading={retrying.has(chunk.chunk_id)}
+                            onClick={() => handleRetry(chunk.chunk_id)}
+                          >
+                            Retry
+                          </Button>
+                        )}
+                      </Flex>
                     </Box>
                   ))}
                 </Stack>

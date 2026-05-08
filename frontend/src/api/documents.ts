@@ -56,3 +56,10 @@ export function deleteDocument(id: string | number) {
     method: 'DELETE',
   });
 }
+
+export function retryChunk(documentId: number, chunkId: number) {
+  return apiFetch<{ artifact_id: number; status: string }>(
+    `/documents/${documentId}/chunks/${chunkId}/retry/`,
+    { method: 'POST' },
+  );
+}

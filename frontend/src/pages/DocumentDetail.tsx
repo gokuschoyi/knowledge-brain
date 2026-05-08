@@ -1,14 +1,15 @@
 import {
+  Badge,
   Box,
   Flex,
   Heading,
-  Text,
   HStack,
-  Stack,
-  SimpleGrid,
-  Badge,
   Separator,
+  SimpleGrid,
+  Stack,
+  Text,
 } from '@chakra-ui/react';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -18,16 +19,30 @@ import {
   getDocumentChunks,
   getDocumentEntities,
   getDocumentRelationships,
+  retryChunk,
   retryDocument,
 } from '../api/documents';
+import type { ChunkExtractionStatus } from '../api/types';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
+import { ConfirmDocumentDeleteDialog } from '../components/documents/ConfirmDocumentDeleteDialog';
 import { LoadingState } from '../components/common/LoadingState';
+
+const extractionStatusPalette: Record<ChunkExtractionStatus, string> = {
+  pending: 'gray',
+  queued: 'yellow',
+  running: 'blue',
+  completed: 'green',
+  failed: 'red',
+};
 
 export function DocumentDetailPage() {
   const { id = '' } = useParams();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [retryingChunks, setRetryingChunks] = useState<Set<number>>(new Set());
+
   const docQuery = useQuery({
     queryKey: ['document', id],
     queryFn: () => getDocument(id),
@@ -57,9 +72,26 @@ export function DocumentDetailPage() {
     mutationFn: deleteDocument,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
+      setIsDeleteDialogOpen(false);
       navigate('/documents');
     },
   });
+
+  const handleRetryChunk = async (chunkId: number) => {
+    setRetryingChunks((prev) => new Set(prev).add(chunkId));
+    try {
+      await retryChunk(Number(id), chunkId);
+      await queryClient.invalidateQueries({
+        queryKey: ['document-chunks', id],
+      });
+    } finally {
+      setRetryingChunks((prev) => {
+        const next = new Set(prev);
+        next.delete(chunkId);
+        return next;
+      });
+    }
+  };
 
   if (docQuery.isLoading || !docQuery.data) {
     return <LoadingState label='Loading document...' />;
@@ -106,7 +138,7 @@ export function DocumentDetailPage() {
               variant='outline'
               colorPalette='red'
               disabled={deleteMutation.isPending}
-              onClick={() => void deleteMutation.mutateAsync(id)}
+              onClick={() => setIsDeleteDialogOpen(true)}
             >
               Delete
             </Button>
@@ -117,7 +149,7 @@ export function DocumentDetailPage() {
           <Heading size='xs' color='slate.500' textTransform='uppercase' mb='2'>
             Summary
           </Heading>
-          <Text color='slate.300' fontSize='md' lineHeight='tall'>
+          <Text color='slate.300' fontSize='sm' lineHeight='tall'>
             {doc.summary || 'No summary available.'}
           </Text>
         </Box>
@@ -151,20 +183,75 @@ export function DocumentDetailPage() {
             overflowY='auto'
             pr='1'
           >
-            {chunksQuery.data?.map((chunk) => (
-              <Box
-                key={chunk.id}
-                borderRadius='md'
-                borderWidth='1px'
-                borderColor='slate.800'
-                p='3'
-                fontSize='sm'
-                color='slate.300'
-                _hover={{ bg: 'slate.900' }}
-              >
-                {chunk.summary}
-              </Box>
-            ))}
+            {chunksQuery.data?.map((chunk) => {
+              const isEmpty =
+                chunk.extraction_status === 'completed' &&
+                chunk.entity_count === 0 &&
+                chunk.relationship_count === 0;
+              const canRetry = chunk.extraction_status === 'failed' || isEmpty;
+              return (
+                <Box
+                  key={chunk.id}
+                  borderRadius='md'
+                  borderWidth='1px'
+                  borderColor={
+                    chunk.extraction_status === 'failed'
+                      ? 'red.900'
+                      : isEmpty
+                        ? 'orange.900'
+                        : 'slate.800'
+                  }
+                  p='3'
+                  fontSize='sm'
+                  color='slate.300'
+                  _hover={{ bg: 'slate.900' }}
+                >
+                  <Flex justify='space-between' align='center' mb='2'>
+                    <Text fontSize='xs' color='slate.500'>
+                      #{chunk.chunk_index + 1}
+                    </Text>
+                    <Flex gap='2' align='center'>
+                      <Badge
+                        size='xs'
+                        colorPalette={
+                          extractionStatusPalette[chunk.extraction_status]
+                        }
+                        variant='subtle'
+                        textTransform='capitalize'
+                      >
+                        {chunk.extraction_status}
+                      </Badge>
+                      {canRetry && (
+                        <Button
+                          size='xs'
+                          variant='outline'
+                          colorPalette={
+                            chunk.extraction_status === 'failed'
+                              ? 'red'
+                              : 'orange'
+                          }
+                          loading={retryingChunks.has(chunk.id)}
+                          onClick={() => void handleRetryChunk(chunk.id)}
+                        >
+                          Retry
+                        </Button>
+                      )}
+                    </Flex>
+                  </Flex>
+                  <Text fontSize='sm' lineClamp={3}>
+                    {chunk.summary}
+                  </Text>
+                  <Flex gap='3' mt='2'>
+                    <Text fontSize='xs' color='slate.500'>
+                      {chunk.entity_count} entities
+                    </Text>
+                    <Text fontSize='xs' color='slate.500'>
+                      {chunk.relationship_count} relationships
+                    </Text>
+                  </Flex>
+                </Box>
+              );
+            })}
           </Stack>
         </Card>
 
@@ -234,6 +321,16 @@ export function DocumentDetailPage() {
           </Stack>
         </Card>
       </SimpleGrid>
+
+      <ConfirmDocumentDeleteDialog
+        documentTitle={doc.title}
+        isOpen={isDeleteDialogOpen}
+        isDeleting={deleteMutation.isPending}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={() => {
+          void deleteMutation.mutateAsync(id);
+        }}
+      />
     </Stack>
   );
 }

@@ -78,6 +78,13 @@ export type IngestionJob = {
   chunk_details: IngestionChunkDetail[];
 };
 
+export type ChunkExtractionStatus =
+  | 'pending'
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed';
+
 export type Chunk = {
   id: number;
   document: number;
@@ -88,6 +95,9 @@ export type Chunk = {
   importance_score: number;
   quality_score: number;
   metadata: JsonValue;
+  extraction_status: ChunkExtractionStatus;
+  entity_count: number;
+  relationship_count: number;
 };
 
 export type Entity = {
@@ -208,6 +218,11 @@ export type GraphEdge = {
 export type GraphResponse = {
   nodes: GraphNode[];
   edges: GraphEdge[];
+};
+
+export type PartitionedGraphResponse = {
+  connected_graph: GraphResponse;
+  isolated_entities: GraphNode[];
 };
 
 export type SelfHealingTaskStatus =

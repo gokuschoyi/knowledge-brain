@@ -34,6 +34,10 @@ class DocumentIngestSerializer(serializers.ModelSerializer):
 
 
 class ChunkSerializer(serializers.ModelSerializer):
+    extraction_status = serializers.SerializerMethodField()
+    entity_count = serializers.SerializerMethodField()
+    relationship_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Chunk
         fields = [
@@ -46,7 +50,20 @@ class ChunkSerializer(serializers.ModelSerializer):
             "importance_score",
             "quality_score",
             "metadata",
+            "extraction_status",
+            "entity_count",
+            "relationship_count",
         ]
+
+    def get_extraction_status(self, obj):
+        artifact = obj.extraction_artifacts.order_by("-id").first()
+        return artifact.status if artifact else "pending"
+
+    def get_entity_count(self, obj):
+        return obj.entity_mentions.count()
+
+    def get_relationship_count(self, obj):
+        return obj.relationships.count()
 
 
 class DocumentSerializer(serializers.ModelSerializer):
@@ -61,6 +78,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             "tags",
             "llm_provider",
             "llm_model",
+            "summary",
             "status",
             "quality_score",
             "error_message",

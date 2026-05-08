@@ -3,7 +3,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.documents.models import Chunk, Document, IngestionJob
+from apps.documents.models import Chunk, ChunkExtractionArtifact, Document, IngestionJob
 from apps.documents.services.document_cleanup import delete_document_and_cleanup
 from apps.documents.serializers import (
     ChunkSerializer,
@@ -13,7 +13,7 @@ from apps.documents.serializers import (
     DocumentSerializer,
     IngestionJobSerializer,
 )
-from apps.documents.tasks import run_document_ingestion
+from apps.documents.tasks import run_chunk_bundled_extraction, run_document_ingestion
 from apps.knowledge.models import Entity, Relationship
 
 
@@ -75,7 +75,28 @@ class DocumentChunksView(generics.ListAPIView):
     serializer_class = ChunkSerializer
 
     def get_queryset(self):
-        return Chunk.objects.filter(document_id=self.kwargs["pk"])
+        return (
+            Chunk.objects
+            .filter(document_id=self.kwargs["pk"])
+            .prefetch_related("extraction_artifacts", "entity_mentions", "relationships")
+        )
+
+
+class ChunkRetryView(APIView):
+    def post(self, request, doc_pk: int, chunk_pk: int):
+        artifact = (
+            ChunkExtractionArtifact.objects
+            .filter(chunk_id=chunk_pk, chunk__document_id=doc_pk)
+            .order_by("-id")
+            .first()
+        )
+        if artifact is None:
+            return Response({"detail": "Chunk artifact not found."}, status=status.HTTP_404_NOT_FOUND)
+        artifact.status = ChunkExtractionArtifact.STATUS_QUEUED
+        artifact.error_message = ""
+        artifact.save(update_fields=["status", "error_message"])
+        run_chunk_bundled_extraction.delay(artifact.id)
+        return Response({"artifact_id": artifact.id, "status": artifact.status}, status=status.HTTP_202_ACCEPTED)
 
 
 class DocumentEntitiesView(generics.ListAPIView):
