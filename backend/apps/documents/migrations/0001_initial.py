@@ -6,7 +6,7 @@ import pgvector.django.vector
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = []
+    dependencies = [("core", "0000_enable_pgvector")]
 
     operations = [
         migrations.CreateModel(
