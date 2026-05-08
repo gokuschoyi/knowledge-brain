@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from datetime import timedelta
 from urllib.parse import quote_plus
 
 import dj_database_url
@@ -100,11 +101,14 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Extraction V2 Configuration
 EXTRACTION_VERSION = os.getenv("EXTRACTION_VERSION", "V1")
+INGESTION_V2_MAX_PARALLEL_CHUNK_TASKS = int(os.getenv("INGESTION_V2_MAX_PARALLEL_CHUNK_TASKS", "5"))
+INGESTION_V2_CHUNK_QUEUE = os.getenv("INGESTION_V2_CHUNK_QUEUE", "ingestion_chunk_extraction")
 
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TASK_DEFAULT_QUEUE = os.getenv("CELERY_TASK_DEFAULT_QUEUE", "celery")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "20"))
 
@@ -115,6 +119,7 @@ OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-s
 OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-4.1-mini")
 DEFAULT_LLM_PROVIDER = os.getenv("DEFAULT_LLM_PROVIDER", "google")
 DEFAULT_LLM_MODEL = os.getenv("DEFAULT_LLM_MODEL", "gemini-2.5-flash-lite")
+AUTO_REPAIR_BEAT_INTERVAL_MINUTES = int(os.getenv("AUTO_REPAIR_BEAT_INTERVAL_MINUTES", "5"))
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": [
@@ -125,4 +130,11 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.MultiPartParser",
         "rest_framework.parsers.FormParser",
     ],
+}
+
+CELERY_BEAT_SCHEDULE = {
+    "run-enabled-auto-repairs": {
+        "task": "apps.self_healing.tasks.run_enabled_auto_repairs_task",
+        "schedule": timedelta(minutes=max(1, AUTO_REPAIR_BEAT_INTERVAL_MINUTES)),
+    }
 }
