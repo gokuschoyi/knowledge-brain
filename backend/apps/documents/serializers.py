@@ -1,7 +1,9 @@
+from django.db.models import Count
 from rest_framework import serializers
 
 from apps.core.llm_catalog import DEFAULT_MODEL, DEFAULT_PROVIDER, MODEL_CATALOG
-from apps.documents.models import Chunk, Document, IngestionJob
+from apps.documents.models import Chunk, ChunkExtractionArtifact, Document, IngestionJob
+from apps.documents.services.ingestion_progress import STAGE_DEFINITIONS, ensure_stage_metadata
 from apps.knowledge.models import Entity, Relationship
 
 
@@ -60,7 +62,6 @@ class DocumentSerializer(serializers.ModelSerializer):
             "llm_provider",
             "llm_model",
             "status",
-            "summary",
             "quality_score",
             "error_message",
             "created_at",
@@ -70,9 +71,64 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 
 class IngestionJobSerializer(serializers.ModelSerializer):
+    stages = serializers.SerializerMethodField()
+    chunk_progress = serializers.SerializerMethodField()
+    chunk_details = serializers.SerializerMethodField()
+
     class Meta:
         model = IngestionJob
-        fields = "__all__"
+        fields = [
+            "id",
+            "document",
+            "status",
+            "current_step",
+            "progress",
+            "log",
+            "metadata",
+            "error_message",
+            "created_at",
+            "updated_at",
+            "stages",
+            "chunk_progress",
+            "chunk_details",
+        ]
+
+    def get_stages(self, obj: IngestionJob) -> list[dict]:
+        stages = ensure_stage_metadata(obj)["stages"]
+        return [stages.get(key, {"key": key, "label": label, "status": "pending", "message": ""}) for key, label in STAGE_DEFINITIONS]
+
+    def get_chunk_progress(self, obj: IngestionJob) -> dict:
+        counts = {
+            "total": 0,
+            "queued": 0,
+            "running": 0,
+            "completed": 0,
+            "failed": 0,
+            "successful_artifacts": 0,
+        }
+        aggregate = {
+            item["status"]: item["count"]
+            for item in obj.chunk_artifacts.values("status").annotate(count=Count("id"))
+        }
+        counts["queued"] = aggregate.get(ChunkExtractionArtifact.STATUS_QUEUED, 0)
+        counts["running"] = aggregate.get(ChunkExtractionArtifact.STATUS_RUNNING, 0)
+        counts["completed"] = aggregate.get(ChunkExtractionArtifact.STATUS_COMPLETED, 0)
+        counts["failed"] = aggregate.get(ChunkExtractionArtifact.STATUS_FAILED, 0)
+        counts["total"] = sum(aggregate.values())
+        counts["successful_artifacts"] = counts["completed"]
+        return counts
+
+    def get_chunk_details(self, obj: IngestionJob) -> list[dict]:
+        return [
+            {
+                "chunk_id": artifact.chunk_id,
+                "chunk_index": artifact.chunk.chunk_index,
+                "status": artifact.status,
+                "attempt_count": artifact.attempt_count,
+                "error_message": artifact.error_message,
+            }
+            for artifact in obj.chunk_artifacts.select_related("chunk").order_by("chunk__chunk_index", "id")
+        ]
 
 
 class DocumentEntitySerializer(serializers.ModelSerializer):

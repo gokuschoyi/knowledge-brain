@@ -95,10 +95,10 @@ class DocumentRelationshipsView(generics.ListAPIView):
 
 
 class IngestionJobDetailView(generics.RetrieveAPIView):
-    queryset = IngestionJob.objects.all()
+    queryset = IngestionJob.objects.prefetch_related("chunk_artifacts__chunk")
     serializer_class = IngestionJobSerializer
 
 
 class IngestionJobEventsView(generics.RetrieveAPIView):
-    queryset = IngestionJob.objects.all()
+    queryset = IngestionJob.objects.prefetch_related("chunk_artifacts__chunk")
     serializer_class = IngestionJobSerializer

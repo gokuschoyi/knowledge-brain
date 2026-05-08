@@ -55,6 +55,7 @@ class IngestionJob(models.Model):
     current_step = models.CharField(max_length=100, blank=True)
     progress = models.IntegerField(default=0)
     log = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
     error_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -78,3 +79,46 @@ class Chunk(models.Model):
     class Meta:
         ordering = ["document_id", "chunk_index"]
         unique_together = ("document", "chunk_index")
+
+
+class ChunkExtractionArtifact(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_QUEUED = "queued"
+    STATUS_RUNNING = "running"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    ingestion_job = models.ForeignKey(
+        IngestionJob,
+        on_delete=models.CASCADE,
+        related_name="chunk_artifacts",
+    )
+    document = models.ForeignKey(
+        Document,
+        on_delete=models.CASCADE,
+        related_name="chunk_artifacts",
+    )
+    chunk = models.ForeignKey(
+        Chunk,
+        on_delete=models.CASCADE,
+        related_name="extraction_artifacts",
+    )
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    payload = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True)
+    attempt_count = models.PositiveIntegerField(default=0)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["chunk__chunk_index", "id"]
+        unique_together = ("ingestion_job", "chunk")
