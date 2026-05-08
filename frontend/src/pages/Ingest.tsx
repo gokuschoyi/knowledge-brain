@@ -6,6 +6,7 @@ import {
   getIngestionJob,
   ingestDocument,
   listDocuments,
+  retryChunk,
 } from '../api/documents';
 import { getBrains } from '../api/brains';
 import { getModelCatalog } from '../api/models';
@@ -22,6 +23,7 @@ export function IngestPage() {
   const queryClient = useQueryClient();
   const [jobId, setJobId] = useState<number | null>(null);
   const [job, setJob] = useState<IngestionJob | null>(null);
+  const [retryVersion, setRetryVersion] = useState(0);
   const documentsQuery = useQuery({
     queryKey: ['documents', activeBrainId],
     queryFn: () => listDocuments(activeBrainId || undefined),
@@ -50,7 +52,15 @@ export function IngestPage() {
       }
     }, 5000);
     return () => window.clearInterval(interval);
-  }, [jobId, queryClient]);
+  }, [jobId, queryClient, retryVersion]);
+
+  const handleRetryChunk = async (chunkId: number) => {
+    if (!job || !jobId) return;
+    await retryChunk(job.document, chunkId);
+    const updated = await getIngestionJob(jobId);
+    setJob(updated);
+    setRetryVersion((v) => v + 1);
+  };
 
   if (
     documentsQuery.isLoading ||
@@ -119,7 +129,7 @@ export function IngestPage() {
             activeBrainName={activeBrain.name}
             modelCatalog={modelCatalogQuery.data}
           />
-          <IngestionProgress job={job} />
+          <IngestionProgress job={job} onRetryChunk={handleRetryChunk} />
         </Box>
       </VStack>
       <DocumentList documents={documentsQuery.data} />

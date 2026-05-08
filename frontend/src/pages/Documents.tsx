@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Flex, Stack, Text } from '@chakra-ui/react';
 
 import { deleteDocument, listDocuments, retryDocument } from '../api/documents';
+import { ConfirmDocumentDeleteDialog } from '../components/documents/ConfirmDocumentDeleteDialog';
 import { DocumentList } from '../components/ingest/DocumentList';
 import { Card } from '../components/common/Card';
 import { LoadingState } from '../components/common/LoadingState';
@@ -12,6 +14,10 @@ export function DocumentsPage() {
   const { activeBrainId } = useActiveBrain();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [pendingDeleteDocument, setPendingDeleteDocument] = useState<{
+    id: number;
+    title: string;
+  } | null>(null);
   const { data, isLoading } = useQuery({
     queryKey: ['documents', activeBrainId],
     queryFn: () => listDocuments(activeBrainId || undefined),
@@ -26,6 +32,7 @@ export function DocumentsPage() {
     mutationFn: deleteDocument,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
+      setPendingDeleteDocument(null);
       navigate('/documents');
     },
   });
@@ -60,18 +67,37 @@ export function DocumentsPage() {
       : null;
 
   return (
-    <Flex h='full' p={6}>
-      <DocumentList
-        documents={data}
-        onRetry={async (id) => {
-          await retryMutation.mutateAsync(id);
+    <>
+      <Flex h='full' p={6}>
+        <DocumentList
+          documents={data}
+          onRetry={async (id) => {
+            await retryMutation.mutateAsync(id);
+          }}
+          onDelete={async (id) => {
+            const document = data.find((item) => item.id === id);
+            if (!document) return;
+            setPendingDeleteDocument({ id, title: document.title });
+          }}
+          busyDocumentId={busyDocumentId}
+          maxHeight='calc(100dvh - 220px)'
+        />
+      </Flex>
+
+      <ConfirmDocumentDeleteDialog
+        documentTitle={pendingDeleteDocument?.title ?? 'this document'}
+        isOpen={!!pendingDeleteDocument}
+        isDeleting={deleteMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteDocument(null);
+          }
         }}
-        onDelete={async (id) => {
-          await deleteMutation.mutateAsync(id);
+        onConfirm={() => {
+          if (!pendingDeleteDocument) return;
+          void deleteMutation.mutateAsync(pendingDeleteDocument.id);
         }}
-        busyDocumentId={busyDocumentId}
-        maxHeight='calc(100dvh - 220px)'
       />
-    </Flex>
+    </>
   );
 }

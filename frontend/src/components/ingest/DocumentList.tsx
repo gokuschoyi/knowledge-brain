@@ -29,7 +29,15 @@ export function DocumentList({
   maxHeight?: string | number;
 }) {
   return (
-    <Box pr={6} py={6} h='full' minH='0' display='flex' flexDirection='column'>
+    <Box
+      pr={6}
+      py={6}
+      h='full'
+      w='full'
+      minH='0'
+      display='flex'
+      flexDirection='column'
+    >
       <Card display='flex' flexDirection='column' h='full' minH='0' flex='1'>
         <Flex mb='4' align='center' justify='space-between'>
           <Heading size='sm' color='white'>
