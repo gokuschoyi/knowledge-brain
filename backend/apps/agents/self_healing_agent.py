@@ -10,6 +10,7 @@ from apps.self_healing.services.contradiction_repair import review_contradiction
 from apps.self_healing.services.duplicate_entity_repair import repair_duplicate_entities
 from apps.self_healing.services.low_confidence_repair import repair_low_confidence_answer
 from apps.self_healing.services.missing_definition_repair import repair_missing_definition
+from apps.knowledge.services.retrieval_enrichment import enrich_entity, enrich_entities_for_brain
 
 
 class RepairState(TypedDict, total=False):
@@ -65,7 +66,16 @@ def run_missing_definition_repair(state: RepairState) -> RepairState:
 
 
 def run_low_confidence_answer_repair(state: RepairState) -> RepairState:
-    return {"result": repair_low_confidence_answer(question=state["task"].payload["question"])}
+    task = state["task"]
+    return {
+        "result": repair_low_confidence_answer(
+            question=task.payload["question"],
+            brain_id=task.brain_id,
+            answer=task.payload.get("answer", ""),
+            knowledge_gaps=task.payload.get("knowledge_gaps", []),
+            confidence_score=float(task.payload.get("confidence_score", 0.0) or 0.0),
+        )
+    }
 
 
 def run_contradiction_review(state: RepairState) -> RepairState:
@@ -83,6 +93,10 @@ def finalize_task(state: RepairState) -> RepairState:
     task.completed_at = timezone.now()
     task.error_message = ""
     task.save(update_fields=["status", "result", "completed_at", "error_message", "updated_at"])
+    if task.task_type == SelfHealingTask.TYPE_MISSING_DEFINITION and task.related_entity_id:
+        enrich_entity(task.related_entity)
+    elif task.task_type == SelfHealingTask.TYPE_DUPLICATE_ENTITY and task.brain_id:
+        enrich_entities_for_brain(task.brain_id)
     return {"task": task}
 
 

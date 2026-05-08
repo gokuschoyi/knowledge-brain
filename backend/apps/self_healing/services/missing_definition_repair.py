@@ -6,6 +6,7 @@ from apps.agents.llm import get_chat_model
 from apps.agents.prompts import MISSING_DEFINITION_PROMPT
 from apps.agents.schemas import MissingDefinitionResponse
 from apps.knowledge.models import Entity
+from apps.knowledge.services.retrieval_enrichment import enrich_entity
 
 
 def repair_missing_definition(
@@ -51,4 +52,5 @@ def repair_missing_definition(
     entity.description = description
     entity.confidence = max(entity.confidence, 0.8)
     entity.save(update_fields=["description", "confidence", "updated_at"])
+    enrich_entity(entity)
     return {"definition": description, "confidence": entity.confidence, "evidence_chunk_ids": evidence_chunk_ids}

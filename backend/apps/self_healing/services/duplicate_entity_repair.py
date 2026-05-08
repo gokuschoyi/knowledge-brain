@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.db import transaction
 
 from apps.knowledge.models import Claim, ChunkEntityMention, Entity, Relationship
+from apps.knowledge.services.retrieval_enrichment import enrich_entity
 
 
 def repair_duplicate_entities(candidate_entity_ids: list[int], suggested_canonical_name: str) -> dict:
@@ -29,6 +30,6 @@ def repair_duplicate_entities(candidate_entity_ids: list[int], suggested_canonic
             entity.delete()
         canonical.aliases = sorted(alias_pool)
         canonical.save(update_fields=["name", "canonical_name", "aliases", "updated_at"])
+        enrich_entity(canonical)
 
     return {"canonical_entity_id": canonical.id, "merged_entity_ids": merged_ids, "aliases": canonical.aliases}
-
