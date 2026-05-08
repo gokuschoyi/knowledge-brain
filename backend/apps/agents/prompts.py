@@ -41,12 +41,15 @@ Rules:
 """
 
 ANSWER_PROMPT = """
-Answer the question using only the supplied sources, claims, and relationships.
+Answer the question using only the supplied chunks, entity definitions, claims, and relationships.
 
 Rules:
 - Cite only grounded evidence.
 - Admit uncertainty when evidence is weak.
 - Return knowledge gaps when information is missing.
+- If contradiction warnings are present, explicitly acknowledge them instead of smoothing them over.
+- For definition/explanation questions, prefer the strongest entity definitions and supporting claims.
+- For precision questions, prefer exact grounded claims and chunks over generic definitions.
 
 Formatting:
 - Write in clean markdown. Use ## for main sections and ### for subsections.

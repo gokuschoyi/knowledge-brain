@@ -15,6 +15,7 @@ from apps.knowledge.services.contradiction_detector import detect_contradictions
 from apps.knowledge.services.entity_extraction import extract_entities_for_chunk
 from apps.knowledge.services.graph_builder import build_graph_for_document
 from apps.knowledge.services.quality_scoring import score_chunk_quality, score_document_quality
+from apps.knowledge.services.retrieval_enrichment import enrich_document_knowledge, summarize_chunk_text
 from apps.knowledge.services.relationship_extraction import extract_relationships_for_chunk
 from apps.retrieval.services.embedding import embed_text
 from apps.self_healing.services.task_generator import generate_tasks_for_document
@@ -85,7 +86,7 @@ def persist_chunks(state: IngestionState) -> IngestionState:
         chunk = Chunk.objects.create(
             document=document,
             text=text,
-            summary=text[:240],
+            summary=summarize_chunk_text(text),
             chunk_index=index,
             token_count=chunk_data["token_count"],
             embedding=embedding,
@@ -157,6 +158,7 @@ def build_graph_records(state: IngestionState) -> IngestionState:
     job = state["job"]
     update_progress(job, "building_graph", 88, "Building graph records")
     build_graph_for_document(state["document"])
+    enrich_document_knowledge(state["document"])
     return {"document": state["document"]}
 
 

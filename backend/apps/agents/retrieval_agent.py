@@ -16,6 +16,7 @@ from apps.retrieval.services.answer_generator import (
 )
 from apps.retrieval.services.confidence import calculate_confidence
 from apps.retrieval.services.graph_search import expand_graph
+from apps.retrieval.services.query_memory import get_query_repair_memory
 from apps.retrieval.services.query_classifier import classify_query
 from apps.retrieval.services.reranker import rerank_results
 from apps.retrieval.services.vector_search import search_chunks
@@ -31,6 +32,7 @@ class RetrievalState(TypedDict, total=False):
     intent: str
     results: list[dict[str, Any]]
     graph_context: dict[str, Any]
+    repair_memory: Any
     top_chunks: list[Any]
     gaps: list[str]
     confidence: float
@@ -42,8 +44,36 @@ def classify_question(state: RetrievalState) -> RetrievalState:
     return {"intent": classify_query(state["question"])}
 
 
+def load_repair_memory(state: RetrievalState) -> RetrievalState:
+    return {
+        "repair_memory": get_query_repair_memory(
+            state["question"],
+            brain_id=state.get("brain_id"),
+        )
+    }
+
+
 def retrieve_chunks(state: RetrievalState) -> RetrievalState:
-    results = rerank_results(search_chunks(state["question"], brain_id=state.get("brain_id")))
+    repair_memory = state.get("repair_memory")
+    graph_context = state.get("graph_context", {})
+    if repair_memory is not None:
+        repair_memory.times_applied += 1
+        repair_memory.save(update_fields=["times_applied"])
+    results = rerank_results(
+        search_chunks(
+            state["question"],
+            brain_id=state.get("brain_id"),
+            preferred_chunk_ids=(
+                repair_memory.recommended_chunk_ids if repair_memory else []
+            ),
+            related_entity_ids=list(
+                dict.fromkeys(
+                    [entity.id for entity in graph_context.get("entities", [])]
+                    + (repair_memory.related_entity_ids if repair_memory else [])
+                )
+            ),
+        )
+    )
     # With smaller 400-token chunks, we can provide 8 chunks to the LLM (approx 3200 tokens)
     top_chunks = [result["chunk"] for result in results[:8]]
     return {"results": results, "top_chunks": top_chunks}
@@ -62,6 +92,8 @@ def assess_gaps(state: RetrievalState) -> RetrievalState:
         gaps.append("Limited grounded evidence was found for this question.")
     if not state.get("graph_context", {}).get("entities"):
         gaps.append("No strongly matching entities were found in the graph.")
+    if state.get("graph_context", {}).get("contradiction_warnings"):
+        gaps.append("Some relevant evidence contains contradictions that should be handled carefully.")
     uncertainty_markers = [
         "not clearly stated",
         "not clearly defined",
@@ -89,6 +121,8 @@ def synthesize_answer(state: RetrievalState) -> RetrievalState:
         top_chunks=state.get("top_chunks", []),
         related_entities=graph_context.get("entities", []),
         relationships=graph_context.get("relationships", []),
+        claims=graph_context.get("claims", []),
+        contradiction_warnings=graph_context.get("contradiction_warnings", []),
         fallback_confidence=state["confidence"],
         knowledge_gaps=state["gaps"],
         llm_provider=state.get("llm_provider"),
@@ -133,6 +167,8 @@ def persist_retrieval_result(state: RetrievalState, answer_payload: dict[str, An
         {
             "intent": state["intent"],
             "knowledge_gaps": payload.get("knowledge_gaps", []),
+            "contradiction_warnings": state["graph_context"].get("contradiction_warnings", []),
+            "repair_memory_id": getattr(state.get("repair_memory"), "id", None),
             "llm_provider": state.get("llm_provider"),
             "llm_model": state.get("llm_model"),
         }
@@ -162,6 +198,7 @@ def persist_retrieval_result(state: RetrievalState, answer_payload: dict[str, An
                     "answer": payload["answer"],
                     "confidence_score": payload["confidence_score"],
                     "top_chunk_ids": payload.get("source_chunk_ids", []),
+                    "related_entity_ids": payload.get("related_entity_ids", []),
                     "knowledge_gaps": payload.get("knowledge_gaps", []),
                 }
             ),
@@ -205,7 +242,13 @@ def run_retrieval_state(
         "llm_provider": llm_provider,
         "llm_model": llm_model,
     }
-    for step in (classify_question, retrieve_chunks, expand_graph_context, assess_gaps):
+    for step in (
+        classify_question,
+        load_repair_memory,
+        expand_graph_context,
+        retrieve_chunks,
+        assess_gaps,
+    ):
         state.update(step(state))
     return state
 
@@ -237,7 +280,10 @@ def stream_question_answer(
     for token in stream_answer_text(
         question=state["question"],
         top_chunks=state.get("top_chunks", []),
+        related_entities=graph_context.get("entities", []),
         relationships=graph_context.get("relationships", []),
+        claims=graph_context.get("claims", []),
+        contradiction_warnings=graph_context.get("contradiction_warnings", []),
         knowledge_gaps=state["gaps"],
         llm_provider=state.get("llm_provider"),
         llm_model=state.get("llm_model"),
@@ -259,15 +305,17 @@ def stream_question_answer(
 def build_retrieval_graph():
     builder = StateGraph(RetrievalState)
     builder.add_node("classify_question", classify_question)
-    builder.add_node("retrieve_chunks", retrieve_chunks)
+    builder.add_node("load_repair_memory", load_repair_memory)
     builder.add_node("expand_graph_context", expand_graph_context)
+    builder.add_node("retrieve_chunks", retrieve_chunks)
     builder.add_node("assess_gaps", assess_gaps)
     builder.add_node("synthesize_answer", synthesize_answer)
     builder.add_node("persist_chat_and_tasks", persist_chat_and_tasks)
     builder.add_edge(START, "classify_question")
-    builder.add_edge("classify_question", "retrieve_chunks")
-    builder.add_edge("retrieve_chunks", "expand_graph_context")
-    builder.add_edge("expand_graph_context", "assess_gaps")
+    builder.add_edge("classify_question", "load_repair_memory")
+    builder.add_edge("load_repair_memory", "expand_graph_context")
+    builder.add_edge("expand_graph_context", "retrieve_chunks")
+    builder.add_edge("retrieve_chunks", "assess_gaps")
     builder.add_edge("assess_gaps", "synthesize_answer")
     builder.add_edge("synthesize_answer", "persist_chat_and_tasks")
     builder.add_edge("persist_chat_and_tasks", END)

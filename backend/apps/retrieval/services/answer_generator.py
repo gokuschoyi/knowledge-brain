@@ -9,13 +9,29 @@ from apps.agents.prompts import ANSWER_PROMPT
 from apps.agents.schemas import AnswerResponse
 
 
+def infer_answer_mode(question: str) -> str:
+    lowered = question.lower()
+    if any(marker in lowered for marker in ("what is", "who is", "define", "overview", "explain")):
+        return "definition"
+    if any(marker in lowered for marker in ("exact", "how much", "price", "cost", "when", "date", "duration")):
+        return "precision"
+    return "general"
+
+
 def build_answer_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages(
         [
             ("system", ANSWER_PROMPT),
             (
                 "human",
-                "Question: {question}\n\nTop chunks:\n{chunk_context}\n\nRelated relationships:\n{relationship_context}\n\nKnowledge gaps already detected:\n{knowledge_gaps}",
+                "Question: {question}\n\n"
+                "Answer mode: {answer_mode}\n\n"
+                "Top chunks:\n{chunk_context}\n\n"
+                "Top entity definitions:\n{entity_context}\n\n"
+                "Related relationships:\n{relationship_context}\n\n"
+                "Grounded claims:\n{claim_context}\n\n"
+                "Contradiction warnings:\n{contradiction_context}\n\n"
+                "Knowledge gaps already detected:\n{knowledge_gaps}",
             ),
         ]
     )
@@ -24,35 +40,79 @@ def build_answer_prompt() -> ChatPromptTemplate:
 def build_answer_prompt_inputs(
     question: str,
     top_chunks: list,
+    related_entities: list,
     relationships: list,
+    claims: list,
+    contradiction_warnings: list[str],
     knowledge_gaps: list[str],
 ) -> dict[str, str]:
+    answer_mode = infer_answer_mode(question)
     chunk_context = "\n\n".join(
-        f"[chunk:{chunk.id}] {chunk.document.title}: {chunk.text[:450]}"
+        f"[chunk:{chunk.id}] {chunk.document.title}: {(chunk.summary or chunk.text[:450])[:450]}"
         for chunk in top_chunks
     )
+    entity_context = "\n".join(
+        f"- {entity.name} ({entity.entity_type}, confidence {entity.confidence:.2f}): "
+        f"{(entity.description or 'No definition available.')[:260]}"
+        for entity in related_entities[:6]
+    )
     relationship_context = "\n".join(
-        f"{rel.source_entity.name} {rel.relationship_type} {rel.target_entity.name}"
+        f"{rel.source_entity.name} {rel.normalized_type or rel.relationship_type} {rel.target_entity.name}"
         for rel in relationships[:8]
     )
+    claim_context = "\n".join(
+        f"- {claim.text[:260]}"
+        + (" [conflicting evidence]" if claim.contradiction_flag else "")
+        for claim in claims[:8]
+    )
+    contradiction_context = "\n".join(contradiction_warnings) or "None"
     return {
         "question": question,
+        "answer_mode": answer_mode,
         "chunk_context": chunk_context or "No chunks found.",
+        "entity_context": entity_context or "No high-confidence entity definitions found.",
         "relationship_context": relationship_context or "No relationships found.",
+        "claim_context": claim_context or "No grounded claims found.",
+        "contradiction_context": contradiction_context,
         "knowledge_gaps": "\n".join(knowledge_gaps) or "None",
     }
 
 
-def build_fallback_answer_text(top_chunks: list, relationships: list, knowledge_gaps: list[str]) -> str:
-    bullet_points = [chunk.summary or chunk.text[:180] for chunk in top_chunks]
+def build_fallback_answer_text(
+    question: str,
+    top_chunks: list,
+    related_entities: list,
+    relationships: list,
+    claims: list,
+    contradiction_warnings: list[str],
+    knowledge_gaps: list[str],
+) -> str:
+    answer_mode = infer_answer_mode(question)
+    bullet_points = [chunk.summary or chunk.text[:180] for chunk in top_chunks[:4]]
     answer = "I've analyzed the knowledge brain context and found the following information:\n\n"
-    answer += "\n".join(f"- {point[:220]}" for point in bullet_points) if bullet_points else "- No supporting chunks were found."
+    if answer_mode == "definition" and related_entities:
+        answer += "\n".join(
+            f"- **{entity.name}**: {(entity.description or 'No strong definition is available yet.')[:220]}"
+            for entity in related_entities[:3]
+        )
+    else:
+        answer += (
+            "\n".join(f"- {point[:220]}" for point in bullet_points)
+            if bullet_points
+            else "- No supporting chunks were found."
+        )
+    if claims:
+        answer += "\n\nGrounded claims:\n"
+        answer += "\n".join(f"- {claim.text[:220]}" for claim in claims[:4])
     if relationships:
         answer += "\n\nRelated relationships:\n"
         answer += "\n".join(
-            f"- {rel.source_entity.name} {rel.relationship_type} {rel.target_entity.name}"
+            f"- {rel.source_entity.name} {rel.normalized_type or rel.relationship_type} {rel.target_entity.name}"
             for rel in relationships[:5]
         )
+    if contradiction_warnings:
+        answer += "\n\nConflicts to keep in mind:\n"
+        answer += "\n".join(f"- {warning}" for warning in contradiction_warnings[:3])
     if knowledge_gaps:
         answer += "\n\nUncertainty:\n" + "\n".join(f"- {gap}" for gap in knowledge_gaps)
     return answer
@@ -98,7 +158,10 @@ def _coerce_stream_text(content) -> str:
 def stream_answer_text(
     question: str,
     top_chunks: list,
+    related_entities: list,
     relationships: list,
+    claims: list,
+    contradiction_warnings: list[str],
     knowledge_gaps: list[str],
     llm_provider: str | None = None,
     llm_model: str | None = None,
@@ -112,7 +175,10 @@ def stream_answer_text(
                 build_answer_prompt_inputs(
                     question=question,
                     top_chunks=top_chunks,
+                    related_entities=related_entities,
                     relationships=relationships,
+                    claims=claims,
+                    contradiction_warnings=contradiction_warnings,
                     knowledge_gaps=knowledge_gaps,
                 )
             ):
@@ -123,7 +189,15 @@ def stream_answer_text(
         except Exception:
             pass
 
-    fallback_answer = build_fallback_answer_text(top_chunks, relationships, knowledge_gaps)
+    fallback_answer = build_fallback_answer_text(
+        question,
+        top_chunks,
+        related_entities,
+        relationships,
+        claims,
+        contradiction_warnings,
+        knowledge_gaps,
+    )
     for start in range(0, len(fallback_answer), 120):
         yield fallback_answer[start:start + 120]
 
@@ -133,6 +207,8 @@ def synthesize_answer_payload(
     top_chunks: list,
     related_entities: list,
     relationships: list,
+    claims: list,
+    contradiction_warnings: list[str],
     fallback_confidence: float,
     knowledge_gaps: list[str],
     llm_provider: str | None = None,
@@ -150,7 +226,10 @@ def synthesize_answer_payload(
                 build_answer_prompt_inputs(
                     question=question,
                     top_chunks=top_chunks,
+                    related_entities=related_entities,
                     relationships=relationships,
+                    claims=claims,
+                    contradiction_warnings=contradiction_warnings,
                     knowledge_gaps=knowledge_gaps,
                 )
             )
@@ -163,7 +242,15 @@ def synthesize_answer_payload(
             pass
 
     return build_answer_payload(
-        answer_text=build_fallback_answer_text(top_chunks, relationships, knowledge_gaps),
+        answer_text=build_fallback_answer_text(
+            question,
+            top_chunks,
+            related_entities,
+            relationships,
+            claims,
+            contradiction_warnings,
+            knowledge_gaps,
+        ),
         fallback_confidence=fallback_confidence,
         source_chunk_ids=source_chunk_ids,
         related_entity_ids=related_entity_ids,
