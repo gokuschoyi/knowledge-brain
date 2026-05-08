@@ -28,7 +28,7 @@ class GraphView(APIView):
             entity_qs = entity_qs.filter(mentions__chunk__document__brain_id=brain_id).distinct()
             relationship_qs = relationship_qs.filter(evidence_chunk__document__brain_id=brain_id).distinct()
 
-        for document in document_qs[:50]:
+        for document in document_qs:
             nodes.append(
                 {
                     "id": f"document-{document.id}",
@@ -38,7 +38,7 @@ class GraphView(APIView):
                 }
             )
 
-        for entity in entity_qs[:200]:
+        for entity in entity_qs:
             nodes.append(
                 {
                     "id": f"entity-{entity.id}",
@@ -48,7 +48,7 @@ class GraphView(APIView):
                 }
             )
 
-        for relationship in relationship_qs[:300]:
+        for relationship in relationship_qs:
             edges.append(
                 {
                     "id": f"rel-{relationship.id}",

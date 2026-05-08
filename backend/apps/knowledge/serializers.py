@@ -1,6 +1,5 @@
 from rest_framework import serializers
 
-from apps.documents.serializers import DocumentSerializer
 from apps.knowledge.models import Claim, Entity, Relationship
 
 
@@ -13,7 +12,7 @@ class EntitySerializer(serializers.ModelSerializer):
 class GraphEntitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Entity
-        exclude = ["embedding"]
+        exclude = ["embedding","retrieval_text"]
 
 
 class RelationshipSerializer(serializers.ModelSerializer):

@@ -14,6 +14,11 @@ class Entity(models.Model):
     confidence = models.FloatField(default=0)
     embedding = VectorField(dimensions=1536, null=True, blank=True)
     aliases = models.JSONField(default=list, blank=True)
+    retrieval_text = models.TextField(blank=True)
+    mention_count = models.PositiveIntegerField(default=0)
+    source_document_count = models.PositiveIntegerField(default=0)
+    top_evidence_chunk_ids = models.JSONField(default=list, blank=True)
+    last_enriched_at = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -32,6 +37,8 @@ class ChunkEntityMention(models.Model):
 
 class Claim(models.Model):
     VERIFIED_UNVERIFIED = "unverified"
+    REVIEW_CLEAR = "clear"
+    REVIEW_CONTRADICTION = "contradiction"
 
     text = models.TextField()
     source_chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, related_name="claims")
@@ -40,6 +47,9 @@ class Claim(models.Model):
     )
     confidence = models.FloatField(default=0)
     verified_status = models.CharField(max_length=50, default=VERIFIED_UNVERIFIED)
+    contradiction_flag = models.BooleanField(default=False)
+    contradiction_review_state = models.CharField(max_length=50, default=REVIEW_CLEAR)
+    subject_key = models.CharField(max_length=255, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -51,6 +61,7 @@ class Relationship(models.Model):
     source_entity = models.ForeignKey(Entity, related_name="outgoing_relationships", on_delete=models.CASCADE)
     target_entity = models.ForeignKey(Entity, related_name="incoming_relationships", on_delete=models.CASCADE)
     relationship_type = models.CharField(max_length=100)
+    normalized_type = models.CharField(max_length=100, blank=True)
     evidence_chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, related_name="relationships")
     confidence = models.FloatField(default=0)
     metadata = models.JSONField(default=dict, blank=True)
@@ -84,4 +95,3 @@ class ChatMessage(models.Model):
 
     class Meta:
         ordering = ["created_at"]
-

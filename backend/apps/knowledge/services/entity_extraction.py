@@ -53,6 +53,8 @@ def _llm_entities(text: str, document_title: str, llm_provider: str | None = Non
     try:
         chain = prompt | model.with_structured_output(EntityExtractionResponse)
         response = chain.invoke({"document_title": document_title, "chunk_text": text})
+        if response is None:
+            return []
         return [entity.model_dump() for entity in response.entities]
     except Exception:
         return []

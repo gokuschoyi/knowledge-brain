@@ -7,6 +7,7 @@ from apps.agents.prompts import RELATIONSHIP_EXTRACTION_PROMPT
 from apps.agents.schemas import RelationshipExtractionResponse
 from apps.documents.models import Chunk
 from apps.knowledge.models import Relationship
+from apps.knowledge.services.retrieval_enrichment import normalize_relationship_type
 
 KEYWORDS = {
     "uses": "uses",
@@ -31,6 +32,8 @@ def _llm_relationships(chunk: Chunk, llm_provider: str | None = None, llm_model:
     try:
         chain = prompt | model.with_structured_output(RelationshipExtractionResponse)
         response = chain.invoke({"chunk_text": chunk.text})
+        if response is None:
+            return []
         return [relationship.model_dump() for relationship in response.relationships]
     except Exception:
         return []
@@ -66,7 +69,12 @@ def extract_relationships_for_chunk(
                 target_entity=target,
                 evidence_chunk=chunk,
                 relationship_type=payload.get("type", "related_to"),
-                defaults={"confidence": payload.get("confidence", 0.66)},
+                defaults={
+                    "confidence": payload.get("confidence", 0.66),
+                    "normalized_type": normalize_relationship_type(
+                        payload.get("type", "related_to")
+                    ),
+                },
             )
             if was_created:
                 created.append(relationship)
@@ -83,7 +91,10 @@ def extract_relationships_for_chunk(
             target_entity=target,
             evidence_chunk=chunk,
             relationship_type=relationship_type,
-            defaults={"confidence": 0.66},
+            defaults={
+                "confidence": 0.66,
+                "normalized_type": normalize_relationship_type(relationship_type),
+            },
         )
         if was_created:
             created.append(relationship)

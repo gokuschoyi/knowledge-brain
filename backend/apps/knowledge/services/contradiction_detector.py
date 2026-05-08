@@ -5,23 +5,15 @@ from collections import defaultdict
 
 from apps.documents.models import Document
 from apps.knowledge.models import Claim
+from apps.knowledge.services.retrieval_enrichment import (
+    build_claim_subject_key,
+    mark_entities_with_contradictions,
+)
 from apps.self_healing.models import SelfHealingTask
 
 
 PRICE_PATTERN = re.compile(r"\$([0-9]+)")
 GENERIC_PRICE_SUBJECTS = {"pro plan", "plan", "pricing", "price"}
-
-
-def _claim_subject_key(claim: Claim) -> str:
-    if claim.subject_entity_id and claim.subject_entity:
-        return claim.subject_entity.name.strip().lower()
-    lowered = claim.text.lower()
-    if "pro plan" in lowered:
-        return "pro plan"
-    if "plan" in lowered and "cost" in lowered:
-        return "pricing plan"
-    return claim.text[:40].strip().lower()
-
 
 def detect_contradictions_for_document(document: Document) -> list[SelfHealingTask]:
     tasks: list[SelfHealingTask] = []
@@ -29,9 +21,14 @@ def detect_contradictions_for_document(document: Document) -> list[SelfHealingTa
     current_doc_claims = list(
         Claim.objects.filter(source_chunk__document=document).select_related("subject_entity", "source_chunk")
     )
-    relevant_keys = {_claim_subject_key(claim) for claim in current_doc_claims}
+    for claim in current_doc_claims:
+        subject_key = build_claim_subject_key(claim)
+        if claim.subject_key != subject_key:
+            claim.subject_key = subject_key
+            claim.save(update_fields=["subject_key"])
+    relevant_keys = {claim.subject_key for claim in current_doc_claims if claim.subject_key}
     for claim in Claim.objects.select_related("subject_entity", "source_chunk", "source_chunk__document"):
-        key = _claim_subject_key(claim)
+        key = claim.subject_key or build_claim_subject_key(claim)
         if key in relevant_keys:
             grouped[key].append(claim)
 
@@ -44,6 +41,14 @@ def detect_contradictions_for_document(document: Document) -> list[SelfHealingTa
             seen_prices.setdefault(match.group(1), []).append(claim)
         if len(seen_prices) > 1:
             flat_claims = [claim for claim_list in seen_prices.values() for claim in claim_list]
+            claim_ids = [claim.id for claim in flat_claims]
+            Claim.objects.filter(id__in=claim_ids).update(
+                contradiction_flag=True,
+                contradiction_review_state=Claim.REVIEW_CONTRADICTION,
+            )
+            mark_entities_with_contradictions(
+                [claim.subject_entity_id for claim in flat_claims if claim.subject_entity_id]
+            )
             claim_ids = sorted(claim.id for claim in flat_claims)
             existing = SelfHealingTask.objects.filter(
                 task_type=SelfHealingTask.TYPE_CONTRADICTION,

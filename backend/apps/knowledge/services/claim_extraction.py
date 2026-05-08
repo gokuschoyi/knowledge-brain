@@ -24,6 +24,8 @@ def _llm_claims(chunk: Chunk, llm_provider: str | None = None, llm_model: str | 
     try:
         chain = prompt | model.with_structured_output(ClaimExtractionResponse)
         response = chain.invoke({"chunk_text": chunk.text})
+        if response is None:
+            return []
         return [claim.model_dump() for claim in response.claims]
     except Exception:
         return []
