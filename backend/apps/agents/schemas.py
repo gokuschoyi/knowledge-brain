@@ -56,3 +56,7 @@ class MissingDefinitionResponse(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     evidence_chunk_ids: list[int] = Field(default_factory=list)
 
+
+class DocumentSummaryResponse(BaseModel):
+    summary: str
+

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
+import logging
 
 from django.conf import settings
 from django.db import transaction
@@ -10,13 +11,25 @@ from django.utils import timezone
 
 from apps.core.utils import deterministic_embedding, normalise_name
 from apps.documents.models import Chunk, ChunkExtractionArtifact, Document, IngestionJob
+from apps.documents.services.confidence_calibration import (
+    DEFAULT_CLAIM_CONFIDENCE,
+    DEFAULT_ENTITY_CONFIDENCE,
+    DEFAULT_RELATIONSHIP_CONFIDENCE,
+    aggregate_entity_confidence,
+    calibrate_claim_confidence,
+    calibrate_entity_confidence,
+    calibrate_relationship_confidence,
+    derive_mention_confidence,
+    inspect_payload_confidence_patterns,
+    normalize_raw_confidence,
+)
 from apps.documents.services.chunking import chunk_text
 from apps.documents.services.document_cleanup import clear_document_knowledge
 from apps.documents.services.ingestion_progress import append_warning, ensure_stage_metadata, set_stage_status
 from apps.documents.services.text_cleaning import clean_text
 from apps.documents.services.text_extraction import extract_text
 from apps.knowledge.models import Claim, ChunkEntityMention, Entity, Relationship
-from apps.knowledge.services.bundled_extraction import extract_bundled_payload
+from apps.knowledge.services.bundled_extraction import extract_bundled_payload, generate_document_summary
 from apps.knowledge.services.contradiction_detector import detect_contradictions_for_document
 from apps.knowledge.services.graph_builder import build_graph_for_document
 from apps.knowledge.services.quality_scoring import score_chunk_quality, score_document_quality
@@ -28,6 +41,8 @@ from apps.knowledge.services.retrieval_enrichment import (
 from apps.retrieval.services.embedding import embed_text
 from apps.self_healing.services.task_generator import generate_tasks_for_document
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class ConsolidatedEntity:
@@ -37,6 +52,9 @@ class ConsolidatedEntity:
     entity_types: Counter = field(default_factory=Counter)
     description: str = ""
     confidence: float = 0.0
+    raw_confidence: float = 0.0
+    calibrated_confidences: list[float] = field(default_factory=list)
+    confidence_notes: set[str] = field(default_factory=set)
     mentions_by_chunk: dict[int, dict] = field(default_factory=dict)
 
 
@@ -46,6 +64,8 @@ class ConsolidatedClaim:
     text: str
     subject_key: str | None
     confidence: float
+    raw_confidence: float
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -55,6 +75,8 @@ class ConsolidatedRelationship:
     target_key: str
     relationship_type: str
     confidence: float
+    raw_confidence: float
+    metadata: dict = field(default_factory=dict)
 
 
 def _resolve_entity_key(name: str | None, local_lookup: dict[str, str], entities: dict[str, ConsolidatedEntity]) -> str | None:
@@ -103,7 +125,10 @@ def _consolidate_artifacts(artifacts: list[ChunkExtractionArtifact]) -> tuple[di
             description = (entity_data.get("description") or "").strip()
             if len(description) > len(consolidated.description):
                 consolidated.description = description
-            consolidated.confidence = max(consolidated.confidence, float(entity_data.get("confidence") or 0.0))
+            raw_confidence = normalize_raw_confidence(
+                entity_data.get("confidence"),
+                DEFAULT_ENTITY_CONFIDENCE,
+            )
             aliases = {
                 alias.strip()
                 for alias in entity_data.get("aliases", [])
@@ -112,12 +137,27 @@ def _consolidate_artifacts(artifacts: list[ChunkExtractionArtifact]) -> tuple[di
             aliases.add(name)
             consolidated.aliases.update(aliases)
 
+            calibrated_confidence, notes = calibrate_entity_confidence(
+                raw_confidence=raw_confidence,
+                name=name,
+                description=description,
+                mention_count=1,
+            )
+            consolidated.raw_confidence = max(consolidated.raw_confidence, raw_confidence)
+            consolidated.calibrated_confidences.append(calibrated_confidence)
+            consolidated.confidence_notes.update(notes)
+            consolidated.confidence = aggregate_entity_confidence(
+                consolidated.calibrated_confidences,
+                mention_count=len(consolidated.mentions_by_chunk) + 1,
+            )
+
             existing_mention = consolidated.mentions_by_chunk.get(chunk_id)
-            mention_confidence = float(entity_data.get("confidence") or 0.0)
+            mention_confidence = derive_mention_confidence(consolidated.confidence)
             if existing_mention is None or mention_confidence >= existing_mention["confidence"]:
                 consolidated.mentions_by_chunk[chunk_id] = {
                     "mention_text": name,
                     "confidence": mention_confidence,
+                    "raw_confidence": raw_confidence,
                 }
 
             local_lookup[key] = key
@@ -135,11 +175,26 @@ def _consolidate_artifacts(artifacts: list[ChunkExtractionArtifact]) -> tuple[di
             subject_key = _resolve_entity_key(claim_data.get("subject"), local_lookup, entities) or default_subject_key
             claim_key = (chunk_id, text)
             if claim_key not in claims:
+                raw_confidence = normalize_raw_confidence(
+                    claim_data.get("confidence"),
+                    DEFAULT_CLAIM_CONFIDENCE,
+                )
+                calibrated_confidence, notes = calibrate_claim_confidence(
+                    raw_confidence=raw_confidence,
+                    text=text,
+                    has_subject_entity=subject_key is not None,
+                )
                 claims[claim_key] = ConsolidatedClaim(
                     chunk_id=chunk_id,
                     text=text,
                     subject_key=subject_key,
-                    confidence=float(claim_data.get("confidence") or 0.0),
+                    confidence=calibrated_confidence,
+                    raw_confidence=raw_confidence,
+                    metadata={
+                        "raw_confidence": raw_confidence,
+                        "confidence_source": "llm+heuristic",
+                        "confidence_notes": notes,
+                    },
                 )
 
         for relationship_data in payload.get("relationships", []):
@@ -148,19 +203,37 @@ def _consolidate_artifacts(artifacts: list[ChunkExtractionArtifact]) -> tuple[di
             if not source_key or not target_key or source_key == target_key:
                 continue
             relationship_type = (relationship_data.get("type") or "related_to").strip() or "related_to"
+            normalized_type = normalize_relationship_type(relationship_type)
             relationship_key = (
                 chunk_id,
                 source_key,
                 target_key,
-                normalize_relationship_type(relationship_type),
+                normalized_type,
             )
             if relationship_key not in relationships:
+                raw_confidence = normalize_raw_confidence(
+                    relationship_data.get("confidence"),
+                    DEFAULT_RELATIONSHIP_CONFIDENCE,
+                )
+                calibrated_confidence, notes = calibrate_relationship_confidence(
+                    raw_confidence=raw_confidence,
+                    relationship_type=relationship_type,
+                    normalized_type=normalized_type,
+                    source_resolved=source_key is not None,
+                    target_resolved=target_key is not None,
+                )
                 relationships[relationship_key] = ConsolidatedRelationship(
                     chunk_id=chunk_id,
                     source_key=source_key,
                     target_key=target_key,
                     relationship_type=relationship_type,
-                    confidence=float(relationship_data.get("confidence") or 0.0),
+                    confidence=calibrated_confidence,
+                    raw_confidence=raw_confidence,
+                    metadata={
+                        "raw_confidence": raw_confidence,
+                        "confidence_source": "llm+heuristic",
+                        "confidence_notes": notes,
+                    },
                 )
 
     return entities, list(claims.values()), list(relationships.values())
@@ -197,6 +270,11 @@ def _persist_consolidated_knowledge(
                 "confidence": consolidated.confidence,
                 "embedding": deterministic_embedding(primary_name),
                 "aliases": aliases,
+                "metadata": {
+                    "raw_confidence": consolidated.raw_confidence,
+                    "confidence_source": "llm+heuristic",
+                    "confidence_notes": sorted(consolidated.confidence_notes),
+                },
             },
         )
         if not created:
@@ -207,6 +285,24 @@ def _persist_consolidated_knowledge(
                 entity.description = consolidated.description
             entity.confidence = max(entity.confidence, consolidated.confidence)
             entity.aliases = merged_aliases
+            entity.metadata = {
+                **(entity.metadata or {}),
+                "raw_confidence": max(
+                    normalize_raw_confidence((entity.metadata or {}).get("raw_confidence"), 0.0),
+                    consolidated.raw_confidence,
+                ),
+                "confidence_source": "llm+heuristic",
+                "confidence_notes": sorted(
+                    {
+                        *(
+                            (entity.metadata or {}).get("confidence_notes", [])
+                            if isinstance((entity.metadata or {}).get("confidence_notes", []), list)
+                            else []
+                        ),
+                        *consolidated.confidence_notes,
+                    }
+                ),
+            }
             if entity.embedding is None:
                 entity.embedding = deterministic_embedding(primary_name)
             entity.save(
@@ -217,6 +313,7 @@ def _persist_consolidated_knowledge(
                     "confidence",
                     "aliases",
                     "embedding",
+                    "metadata",
                     "updated_at",
                 ]
             )
@@ -239,6 +336,7 @@ def _persist_consolidated_knowledge(
             defaults={
                 "subject_entity": entity_map.get(claim.subject_key) if claim.subject_key else None,
                 "confidence": claim.confidence,
+                "metadata": claim.metadata,
             },
         )
 
@@ -255,6 +353,7 @@ def _persist_consolidated_knowledge(
             defaults={
                 "confidence": relationship.confidence,
                 "normalized_type": normalize_relationship_type(relationship.relationship_type),
+                "metadata": relationship.metadata,
             },
         )
 
@@ -419,6 +518,16 @@ def run_chunk_bundled_extraction_for_artifact(artifact_id: int) -> None:
             chunk_id=artifact.chunk_id,
             document_id=artifact.document_id,
         )
+        warnings = inspect_payload_confidence_patterns(payload)
+        if warnings:
+            logger.warning(
+                "Suspicious confidence pattern in bundled extraction "
+                "(document_id=%s, chunk_id=%s, artifact_id=%s, warnings=%s)",
+                artifact.document_id,
+                artifact.chunk_id,
+                artifact.id,
+                ",".join(warnings),
+            )
         artifact.payload = payload
         artifact.status = ChunkExtractionArtifact.STATUS_COMPLETED
         artifact.completed_at = timezone.now()
@@ -529,7 +638,9 @@ def finalize_ingestion_job(job_id: int) -> None:
 
         set_stage_status(job, "scoring_quality", "running", "Scoring document quality", progress=96)
         document.quality_score = score_document_quality(document)
-        document.summary = (document.raw_text or "")[:400]
+        document.summary = generate_document_summary(
+            document.raw_text or "", document.title, document_id=document.id
+        )
         document.status = Document.STATUS_COMPLETED
         document.error_message = ""
         document.save(update_fields=["quality_score", "summary", "status", "error_message", "updated_at"])

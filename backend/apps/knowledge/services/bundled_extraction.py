@@ -5,7 +5,7 @@ from django.db import transaction
 from langchain_core.prompts import ChatPromptTemplate
 
 from apps.agents.llm import get_chat_model
-from apps.agents.prompts import BUNDLED_EXTRACTION_PROMPT
+from apps.agents.prompts import BUNDLED_EXTRACTION_PROMPT, DOCUMENT_SUMMARY_PROMPT
 from apps.agents.schemas import BundledExtractionResponse
 from apps.core.utils import deterministic_embedding
 from apps.documents.models import Chunk
@@ -175,3 +175,35 @@ def extract_bundled_payload(
         chunk_id=chunk_id,
         document_id=document_id,
     )
+
+
+def generate_document_summary(
+    text: str,
+    document_title: str,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+    document_id: int | None = None,
+) -> str:
+    model = get_chat_model(llm_provider, llm_model)
+    if model is None:
+        logger.warning(
+            "Document summary generation skipped — no live chat model available (document_id=%s).",
+            document_id,
+        )
+        return text[:400]
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", DOCUMENT_SUMMARY_PROMPT),
+            ("human", "Document title: {document_title}\n\nDocument text:\n{text}"),
+        ]
+    )
+    try:
+        chain = prompt | model
+        response = chain.invoke({"document_title": document_title, "text": text[:3000]})
+        summary = response.content.strip() if hasattr(response, "content") else str(response).strip()
+        return summary if summary else text[:400]
+    except Exception:
+        logger.exception(
+            "Document summary generation failed (document_id=%s).", document_id
+        )
+        return text[:400]

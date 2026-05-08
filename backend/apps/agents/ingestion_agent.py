@@ -9,7 +9,7 @@ from apps.documents.services.chunking import chunk_text
 from apps.documents.services.ingestion_progress import update_progress
 from apps.documents.services.text_cleaning import clean_text
 from apps.documents.services.text_extraction import extract_text
-from apps.knowledge.services.bundled_extraction import extract_bundled_for_chunk
+from apps.knowledge.services.bundled_extraction import extract_bundled_for_chunk, generate_document_summary
 from apps.knowledge.services.claim_extraction import extract_claims_for_chunk
 from apps.knowledge.services.contradiction_detector import detect_contradictions_for_document
 from apps.knowledge.services.entity_extraction import extract_entities_for_chunk
@@ -167,7 +167,9 @@ def finalize_quality_and_tasks(state: IngestionState) -> IngestionState:
     job = state["job"]
     update_progress(job, "scoring_quality", 93, "Scoring knowledge quality")
     document.quality_score = score_document_quality(document)
-    document.summary = state["cleaned_text"][:400]
+    document.summary = generate_document_summary(
+        state["cleaned_text"], document.title, document_id=document.id
+    )
     document.status = Document.STATUS_COMPLETED
     document.save(update_fields=["quality_score", "summary", "status", "raw_text", "updated_at"])
     detect_contradictions_for_document(document)

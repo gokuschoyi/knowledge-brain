@@ -38,6 +38,13 @@ Rules:
 - Be precise and maintain consistency: use the EXACT same entity names for claims and relationships.
 - Only extract information explicitly stated in the chunk.
 - For claims, associate them with a subject entity if possible.
+- Return a confidence value for every entity, claim, and relationship using the full 0.0-1.0 range conservatively.
+- Confidence guidance:
+  - 0.3-0.5: weak or partial grounding
+  - 0.6-0.8: reasonably grounded in explicit text
+  - 0.9+: only when the evidence is direct, unambiguous, and specific
+- Do not default to 1.0.
+- Lower confidence when an entity description is weak, a claim subject is ambiguous, or a relationship is generic or only loosely grounded.
 """
 
 ANSWER_PROMPT = """
@@ -69,4 +76,14 @@ Rules:
 - Stay grounded in evidence.
 - Do not invent capabilities or facts.
 - Keep the definition useful for a knowledge-base sidebar.
+"""
+
+DOCUMENT_SUMMARY_PROMPT = """
+Write a concise summary (2–4 sentences) of the document based on the provided text.
+
+Rules:
+- Capture the main topic, purpose, and key points.
+- Stay grounded in the text — do not invent facts.
+- Write in plain prose, no bullet points or headings.
+- Aim for 60–120 words.
 """
