@@ -10,6 +10,22 @@ def normalise_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", value.lower()).strip()
 
 
+def normalise_query_text(value: str) -> str:
+    terms = re.findall(r"[a-z0-9]+", value.lower())
+    return " ".join(term for term in terms if len(term) > 2).strip()
+
+
+def query_terms(value: str) -> list[str]:
+    normalized = normalise_query_text(value)
+    if not normalized:
+        return []
+    seen: list[str] = []
+    for term in normalized.split():
+        if term not in seen:
+            seen.append(term)
+    return seen
+
+
 def token_estimate(text: str) -> int:
     return max(1, math.ceil(len(text.split()) * 1.3))
 
