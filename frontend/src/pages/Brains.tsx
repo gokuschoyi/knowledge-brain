@@ -58,7 +58,10 @@ export function BrainsPage() {
 
   const updateMutation = useMutation({
     mutationFn: (id: string) =>
-      updateBrain(id, formData.name, formData.description),
+      updateBrain(id, {
+        name: formData.name,
+        description: formData.description,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brains'] });
       setEditingId(null);

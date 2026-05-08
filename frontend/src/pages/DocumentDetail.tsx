@@ -141,7 +141,7 @@ export function DocumentDetailPage() {
       <SimpleGrid columns={{ base: 1, xl: 3 }} gap='6' flex='1' minH='0'>
         <Card display='flex' flexDirection='column' minH='0'>
           <Heading size='sm' color='white' mb='4'>
-            Chunks
+            Chunks, {chunksQuery.data?.length ?? 0}
           </Heading>
           <Stack
             gap='3'
@@ -170,7 +170,7 @@ export function DocumentDetailPage() {
 
         <Card display='flex' flexDirection='column' minH='0'>
           <Heading size='sm' color='white' mb='4'>
-            Entities
+            Entities, {entitiesQuery.data?.length ?? 0}
           </Heading>
           <Stack
             gap='2'
@@ -199,7 +199,7 @@ export function DocumentDetailPage() {
 
         <Card display='flex' flexDirection='column' minH='0'>
           <Heading size='sm' color='white' mb='4'>
-            Relationships
+            Relationships, {relationshipsQuery.data?.length ?? 0}
           </Heading>
           <Stack
             gap='2'

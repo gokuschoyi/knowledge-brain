@@ -101,17 +101,26 @@ export function IngestPage() {
       minH='0'
     >
       <VStack gap={6} align='stretch' minH='0' py={6} pl={6}>
-        <IngestForm
-          onSubmit={async (payload) => {
-            return ingestMutation.mutateAsync(payload);
-          }}
-          loading={ingestMutation.isPending}
-          ingestionActive={ingestionActive}
-          activeBrainId={activeBrain.id}
-          activeBrainName={activeBrain.name}
-          modelCatalog={modelCatalogQuery.data}
-        />
-        <IngestionProgress job={job} />
+        <Box
+          flex='1'
+          overflowY={'auto'}
+          display='flex'
+          flexDirection='column'
+          gap={6}
+          pr={2}
+        >
+          <IngestForm
+            onSubmit={async (payload) => {
+              return ingestMutation.mutateAsync(payload);
+            }}
+            loading={ingestMutation.isPending}
+            ingestionActive={ingestionActive}
+            activeBrainId={activeBrain.id}
+            activeBrainName={activeBrain.name}
+            modelCatalog={modelCatalogQuery.data}
+          />
+          <IngestionProgress job={job} />
+        </Box>
       </VStack>
       <DocumentList documents={documentsQuery.data} />
     </Grid>

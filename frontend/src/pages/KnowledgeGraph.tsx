@@ -8,6 +8,7 @@ import { getGraph } from '../api/graph';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { EmptyState } from '../components/common/EmptyState';
+// import { KnowledgeGraphView } from 'components/graph/KnowledgeGraphView';
 import { ElkKnowledgeGraphView } from '../components/graph/ElkKnowledgeGraphView';
 // import { GraphLegend } from '../components/graph/GraphLegend';
 import { IsolatedEntitiesPanel } from '../components/graph/IsolatedEntitiesPanel';

@@ -4,6 +4,10 @@ export type Brain = {
   id: string;
   name: string;
   description: string;
+  auto_repair_enabled: boolean;
+  auto_repair_safe_only: boolean;
+  auto_repair_frequency_minutes: number;
+  last_auto_repair_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -19,10 +23,22 @@ export function createBrain(name: string, description: string) {
   });
 }
 
-export function updateBrain(id: string, name: string, description: string) {
+export function updateBrain(
+  id: string,
+  payload: Partial<
+    Pick<
+      Brain,
+      | 'name'
+      | 'description'
+      | 'auto_repair_enabled'
+      | 'auto_repair_safe_only'
+      | 'auto_repair_frequency_minutes'
+    >
+  >,
+) {
   return apiFetch<Brain>(`/dashboard/brains/${id}/`, {
     method: 'PATCH',
-    body: JSON.stringify({ name, description }),
+    body: JSON.stringify(payload),
   });
 }
 

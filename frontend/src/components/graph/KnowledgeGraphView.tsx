@@ -7,9 +7,10 @@ import ReactFlow, {
   Position,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Box, Heading, Text, Stack, Grid, Code } from '@chakra-ui/react';
+import { Box, Heading, Text, Stack, Grid } from '@chakra-ui/react';
 import type { GraphResponse } from '../../api/types';
 import { Card } from '../common/Card';
+import { NodeDetails } from './NodeDetails';
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 72;
@@ -133,10 +134,6 @@ export function KnowledgeGraphView({ graph }: { graph: GraphResponse }) {
       const sourceNeighbors = adjacency.get(edge.source) ?? [];
       sourceNeighbors.push({ nodeId: edge.target, edgeId: edge.id });
       adjacency.set(edge.source, sourceNeighbors);
-
-      const targetNeighbors = adjacency.get(edge.target) ?? [];
-      targetNeighbors.push({ nodeId: edge.source, edgeId: edge.id });
-      adjacency.set(edge.target, targetNeighbors);
     });
 
     const nodeIds = new Set<string>([selectedNodeId]);
@@ -216,17 +213,6 @@ export function KnowledgeGraphView({ graph }: { graph: GraphResponse }) {
     [nodes, selectedNodeId],
   );
 
-  const selectedNodeData = useMemo(() => {
-    if (!selectedNode) return null;
-    const nodeData = selectedNode.data || {};
-    if ('embedding' in nodeData) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { embedding, ...rest } = nodeData;
-      return rest;
-    }
-    return nodeData;
-  }, [selectedNode]);
-
   return (
     <Grid
       gap='6'
@@ -264,18 +250,8 @@ export function KnowledgeGraphView({ graph }: { graph: GraphResponse }) {
           >
             Selected Node
           </Heading>
-          {selectedNodeData ? (
-            <Code
-              variant='plain'
-              bg='transparent'
-              p='0'
-              fontSize='xs'
-              color='slate.300'
-              whiteSpace='pre-wrap'
-              wordBreak='break-word'
-            >
-              {JSON.stringify(selectedNodeData, null, 2)}
-            </Code>
+          {selectedNode ? (
+            <NodeDetails selectedNode={selectedNode} />
           ) : (
             <Text fontSize='sm' color='slate.500'>
               Click a node to inspect it.

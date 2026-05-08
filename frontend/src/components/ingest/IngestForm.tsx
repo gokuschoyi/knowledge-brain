@@ -9,7 +9,7 @@ import {
   Text,
   NativeSelect,
   Textarea,
-  Badge,
+  // Badge,
 } from '@chakra-ui/react';
 import { FileUp, Settings2 } from 'lucide-react';
 
@@ -22,7 +22,7 @@ export function IngestForm({
   loading,
   ingestionActive,
   activeBrainId,
-  activeBrainName,
+  // activeBrainName,
   modelCatalog,
 }: {
   onSubmit: (payload: FormData) => Promise<DocumentIngestResponse>;
@@ -98,79 +98,6 @@ export function IngestForm({
 
       <form onSubmit={handleSubmit}>
         <Stack gap='5'>
-          <Field.Root invalid={!title}>
-            <Field.Label color='slate.300'>Document Title</Field.Label>
-            <Input
-              placeholder='e.g. Q4 Financial Report'
-              bg='slate.950'
-              borderColor='slate.800'
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </Field.Root>
-
-          <Field.Root>
-            <Field.Label color='slate.300'>Knowledge Brain</Field.Label>
-            <Badge
-              colorPalette='cyan'
-              variant='subtle'
-              px='3'
-              py='2'
-              borderRadius='md'
-            >
-              {activeBrainName}
-            </Badge>
-          </Field.Root>
-
-          <Field.Root>
-            <Field.Label color='slate.300'>Source Type</Field.Label>
-            <NativeSelect.Root>
-              <NativeSelect.Field
-                bg='slate.950'
-                borderColor='slate.800'
-                value={sourceType}
-                onChange={handleSourceTypeChange}
-              >
-                <option value='file'>Local File</option>
-                <option value='url'>Remote URL</option>
-                <option value='text'>Raw Text</option>
-              </NativeSelect.Field>
-            </NativeSelect.Root>
-          </Field.Root>
-
-          {sourceType === 'url' ? (
-            <Field.Root invalid={!url}>
-              <Field.Label color='slate.300'>Document URL</Field.Label>
-              <Input
-                placeholder='https://example.com/doc.pdf'
-                bg='slate.950'
-                borderColor='slate.800'
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-              />
-            </Field.Root>
-          ) : sourceType === 'text' ? (
-            <Textarea
-              placeholder='Enter or paste the content to ingest...'
-              bg='slate.950'
-              borderColor='slate.800'
-              minH='150px'
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-            />
-          ) : (
-            <Field.Root invalid={!file}>
-              <Field.Label color='slate.300'>File</Field.Label>
-              <Input
-                type='file'
-                bg='slate.950'
-                borderColor='slate.800'
-                pt='1.5'
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-              />
-            </Field.Root>
-          )}
-
           <Box pt='2' borderTop='1px' borderColor='slate.800'>
             <Text
               fontSize='xs'
@@ -230,6 +157,79 @@ export function IngestForm({
               </Field.Root>
             </Stack>
           </Box>
+
+          <Field.Root invalid={!title}>
+            <Field.Label color='slate.300'>Document Title</Field.Label>
+            <Input
+              placeholder='e.g. Q4 Financial Report'
+              bg='slate.950'
+              borderColor='slate.800'
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </Field.Root>
+
+          {/* <Field.Root>
+            <Field.Label color='slate.300'>Knowledge Brain</Field.Label>
+            <Badge
+              colorPalette='cyan'
+              variant='subtle'
+              px='3'
+              py='2'
+              borderRadius='md'
+            >
+              {activeBrainName}
+            </Badge>
+          </Field.Root> */}
+
+          <Field.Root>
+            <Field.Label color='slate.300'>Source Type</Field.Label>
+            <NativeSelect.Root>
+              <NativeSelect.Field
+                bg='slate.950'
+                borderColor='slate.800'
+                value={sourceType}
+                onChange={handleSourceTypeChange}
+              >
+                <option value='file'>Local File</option>
+                <option value='url'>Remote URL</option>
+                <option value='text'>Raw Text</option>
+              </NativeSelect.Field>
+            </NativeSelect.Root>
+          </Field.Root>
+
+          {sourceType === 'url' ? (
+            <Field.Root invalid={!url}>
+              <Field.Label color='slate.300'>Document URL</Field.Label>
+              <Input
+                placeholder='https://example.com/doc.pdf'
+                bg='slate.950'
+                borderColor='slate.800'
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+              />
+            </Field.Root>
+          ) : sourceType === 'text' ? (
+            <Textarea
+              placeholder='Enter or paste the content to ingest...'
+              bg='slate.950'
+              borderColor='slate.800'
+              minH='150px'
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          ) : (
+            <Field.Root invalid={!file}>
+              <Field.Label color='slate.300'>File</Field.Label>
+              <Input
+                type='file'
+                bg='slate.950'
+                borderColor='slate.800'
+                pt='1.5'
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              />
+            </Field.Root>
+          )}
 
           <Stack direction='row' gap='3' mt='2'>
             <Button

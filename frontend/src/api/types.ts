@@ -26,7 +26,40 @@ export type DocumentSummary = {
 
 export type IngestionLogEntry = {
   step: string;
+  status?: string;
   message: string;
+};
+
+export type IngestionStage = {
+  key: string;
+  label: string;
+  status:
+    | 'pending'
+    | 'running'
+    | 'completed'
+    | 'failed'
+    | 'skipped'
+    | 'warning';
+  message: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+};
+
+export type IngestionChunkProgress = {
+  total: number;
+  queued: number;
+  running: number;
+  completed: number;
+  failed: number;
+  successful_artifacts: number;
+};
+
+export type IngestionChunkDetail = {
+  chunk_id: number;
+  chunk_index: number;
+  status: 'pending' | 'queued' | 'running' | 'completed' | 'failed';
+  attempt_count: number;
+  error_message: string;
 };
 
 export type IngestionJob = {
@@ -36,9 +69,13 @@ export type IngestionJob = {
   current_step: string;
   progress: number;
   log: IngestionLogEntry[];
+  metadata: { [key: string]: JsonValue };
   error_message: string;
   created_at: string;
   updated_at: string;
+  stages: IngestionStage[];
+  chunk_progress: IngestionChunkProgress;
+  chunk_details: IngestionChunkDetail[];
 };
 
 export type Chunk = {
