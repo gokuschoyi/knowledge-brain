@@ -6,6 +6,7 @@ export type Brain = {
   description: string;
   auto_repair_enabled: boolean;
   auto_repair_safe_only: boolean;
+  auto_repair_allowed_types: string[];
   auto_repair_frequency_minutes: number;
   last_auto_repair_at: string | null;
   created_at: string;
@@ -32,6 +33,7 @@ export function updateBrain(
       | 'description'
       | 'auto_repair_enabled'
       | 'auto_repair_safe_only'
+      | 'auto_repair_allowed_types'
       | 'auto_repair_frequency_minutes'
     >
   >,

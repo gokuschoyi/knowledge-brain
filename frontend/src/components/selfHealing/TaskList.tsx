@@ -1,4 +1,4 @@
-import { Stack, Text, VStack } from '@chakra-ui/react';
+import { Stack, VStack } from '@chakra-ui/react';
 import type { SelfHealingTask } from '../../api/types';
 import { TaskCard } from './TaskCard';
 
@@ -17,9 +17,6 @@ export function TaskList({
 }) {
   return (
     <Stack gap={3} pl={6} pb={2}>
-      <Text fontSize='sm' color='slate.500'>
-        Tasks stay in a stable order while their repair status updates.
-      </Text>
       <VStack gap={4} align='stretch'>
         {tasks.map((task) => (
           <TaskCard

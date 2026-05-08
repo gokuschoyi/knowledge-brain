@@ -25,6 +25,7 @@ def queue_brain_auto_repairs(
     brain_id,
     *,
     safe_only: bool = True,
+    allowed_types: list[str] | None = None,
     limit: int = 20,
 ) -> list[int]:
     queryset = SelfHealingTask.objects.filter(
@@ -33,6 +34,8 @@ def queue_brain_auto_repairs(
     ).order_by("-priority", "-created_at")
     if safe_only:
         queryset = queryset.filter(task_type__in=SAFE_AUTO_REPAIR_TYPES)
+    elif allowed_types:
+        queryset = queryset.filter(task_type__in=allowed_types)
     queued_ids = list(queryset.values_list("id", flat=True)[:limit])
     Brain.objects.filter(id=brain_id).update(last_auto_repair_at=timezone.now())
     return queued_ids
@@ -47,6 +50,7 @@ def queue_enabled_auto_repairs(limit_per_brain: int = 20) -> dict[str, list[int]
         queued[str(brain.id)] = queue_brain_auto_repairs(
             brain.id,
             safe_only=brain.auto_repair_safe_only,
+            allowed_types=brain.auto_repair_allowed_types or [],
             limit=limit_per_brain,
         )
     return queued

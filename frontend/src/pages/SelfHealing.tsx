@@ -11,7 +11,7 @@ import {
   Portal,
   Flex,
 } from '@chakra-ui/react';
-import { Filter, Play, X } from 'lucide-react';
+import { Filter, Play, RefreshCw, X } from 'lucide-react';
 
 import {
   ignoreSelfHealingTask,
@@ -42,9 +42,17 @@ import {
 import type { SelfHealingTask } from '../api/types';
 import type { Brain } from '../api/brains';
 
+const RUNNABLE_REPAIR_TYPES = [
+  'missing_definition',
+  'duplicate_entity',
+  'low_confidence_answer',
+  'contradiction',
+] as const;
+
 export function SelfHealingPage() {
   const { activeBrainId } = useActiveBrain();
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isAutoRepairDialogOpen, setIsAutoRepairDialogOpen] = useState(false);
   const [activePolledTaskIds, setActivePolledTaskIds] = useState<number[]>([]);
   const [activeTaskTypeFilter, setActiveTaskTypeFilter] = useState<
     string | null
@@ -60,6 +68,7 @@ export function SelfHealingPage() {
     brainId: string;
     enabled: boolean;
     safeOnly: boolean;
+    allowedTypes: string[];
     frequencyMinutes: string;
   } | null>(null);
   const queryClient = useQueryClient();
@@ -113,11 +122,13 @@ export function SelfHealingPage() {
       id: string;
       auto_repair_enabled: boolean;
       auto_repair_safe_only: boolean;
+      auto_repair_allowed_types: string[];
       auto_repair_frequency_minutes: number;
     }) =>
       updateBrain(payload.id, {
         auto_repair_enabled: payload.auto_repair_enabled,
         auto_repair_safe_only: payload.auto_repair_safe_only,
+        auto_repair_allowed_types: payload.auto_repair_allowed_types,
         auto_repair_frequency_minutes: payload.auto_repair_frequency_minutes,
       }),
     onSuccess: (brain) => {
@@ -213,6 +224,7 @@ export function SelfHealingPage() {
       brainId: brain.id,
       enabled: brain.auto_repair_enabled,
       safeOnly: brain.auto_repair_safe_only,
+      allowedTypes: brain.auto_repair_allowed_types ?? [],
       frequencyMinutes: String(brain.auto_repair_frequency_minutes ?? 60),
     });
   }
@@ -246,156 +258,19 @@ export function SelfHealingPage() {
     !!autoRepairForm &&
     (autoRepairForm.enabled !== activeBrain.auto_repair_enabled ||
       autoRepairForm.safeOnly !== activeBrain.auto_repair_safe_only ||
-      parsedFrequency !== activeBrain.auto_repair_frequency_minutes);
+      parsedFrequency !== activeBrain.auto_repair_frequency_minutes ||
+      JSON.stringify(autoRepairForm.allowedTypes.slice().sort()) !==
+        JSON.stringify(
+          (activeBrain.auto_repair_allowed_types ?? []).slice().sort(),
+        ));
 
   return (
     <Stack gap='6' pb={6} h='full' minH='0' position='relative'>
-      <Box px={6} pt={6}>
-        <Card p={5}>
-          <Stack gap='4'>
-            <Flex justify='space-between' align='start' gap='4' wrap='wrap'>
-              <Box>
-                <Heading size='sm' color='white'>
-                  Auto Repair
-                </Heading>
-                <Text fontSize='sm' color='slate.400' mt='1'>
-                  Run safe self-healing tasks for this brain on a schedule.
-                </Text>
-              </Box>
-              <Button
-                onClick={() => {
-                  if (!autoRepairForm) return;
-                  updateBrainMutation.mutate({
-                    id: activeBrain.id,
-                    auto_repair_enabled: autoRepairForm.enabled,
-                    auto_repair_safe_only: autoRepairForm.safeOnly,
-                    auto_repair_frequency_minutes: parsedFrequency,
-                  });
-                }}
-                loading={updateBrainMutation.isPending}
-                disabled={!autoRepairDirty}
-              >
-                Save auto-repair
-              </Button>
-            </Flex>
-
-            <Grid templateColumns={{ base: '1fr', md: '1fr 1fr 1fr' }} gap='4'>
-              <Card px={4} py={3} bg='transparent'>
-                <Stack gap='3'>
-                  <Checkbox.Root
-                    checked={!!autoRepairForm?.enabled}
-                    onCheckedChange={(details) =>
-                      setAutoRepairForm((current) =>
-                        current
-                          ? {
-                              ...current,
-                              enabled: details.checked === true,
-                            }
-                          : current,
-                      )
-                    }
-                  >
-                    <Checkbox.HiddenInput />
-                    <Checkbox.Control />
-                    <Checkbox.Label color='white'>
-                      Enable auto repair
-                    </Checkbox.Label>
-                  </Checkbox.Root>
-                  <Text fontSize='xs' color='slate.500'>
-                    Turns on scheduled repair runs for this brain.
-                  </Text>
-                </Stack>
-              </Card>
-
-              <Card px={4} py={3} bg='transparent'>
-                <Stack gap='3'>
-                  <Checkbox.Root
-                    checked={!!autoRepairForm?.safeOnly}
-                    disabled={!autoRepairForm?.enabled}
-                    onCheckedChange={(details) =>
-                      setAutoRepairForm((current) =>
-                        current
-                          ? {
-                              ...current,
-                              safeOnly: details.checked === true,
-                            }
-                          : current,
-                      )
-                    }
-                  >
-                    <Checkbox.HiddenInput />
-                    <Checkbox.Control />
-                    <Checkbox.Label color='white'>
-                      Safe repairs only
-                    </Checkbox.Label>
-                  </Checkbox.Root>
-                  <Text fontSize='xs' color='slate.500'>
-                    Keeps automatic runs limited to low-risk repair types.
-                  </Text>
-                </Stack>
-              </Card>
-
-              <Card px={4} py={3} bg='transparent'>
-                <Field
-                  label='Repair frequency'
-                  helperText='How often scheduled auto-repair should run.'
-                >
-                  <NativeSelect.Root disabled={!autoRepairForm?.enabled}>
-                    <NativeSelect.Field
-                      value={autoRepairForm?.frequencyMinutes ?? '60'}
-                      onChange={(event) =>
-                        setAutoRepairForm((current) =>
-                          current
-                            ? {
-                                ...current,
-                                frequencyMinutes: event.target.value,
-                              }
-                            : current,
-                        )
-                      }
-                    >
-                      {frequencyOptions.map((minutes) => (
-                        <option key={minutes} value={String(minutes)}>
-                          {minutes < 60
-                            ? `Every ${minutes} minutes`
-                            : minutes === 60
-                              ? 'Every hour'
-                              : minutes < 1440
-                                ? `Every ${minutes / 60} hours`
-                                : 'Every day'}
-                        </option>
-                      ))}
-                    </NativeSelect.Field>
-                  </NativeSelect.Root>
-                </Field>
-              </Card>
-            </Grid>
-
-            <Flex justify='space-between' align='center' gap='4' wrap='wrap'>
-              <Text fontSize='xs' color='slate.500'>
-                {activeBrain.last_auto_repair_at
-                  ? `Last auto-repair run: ${new Date(activeBrain.last_auto_repair_at).toLocaleString()}`
-                  : 'No auto-repair run has been recorded yet.'}
-              </Text>
-              {autoRepairForm?.enabled ? (
-                <Text fontSize='xs' color='slate.400'>
-                  Scheduled for every {parsedFrequency} minute
-                  {parsedFrequency === 1 ? '' : 's'}.
-                </Text>
-              ) : (
-                <Text fontSize='xs' color='slate.500'>
-                  Automatic repair is currently disabled.
-                </Text>
-              )}
-            </Flex>
-          </Stack>
-        </Card>
-      </Box>
-
       {tasks.length ? (
         <>
           <Grid
-            p={6}
+            px={6}
+            pt={6}
             templateColumns={{ base: '1fr 1fr', xl: 'repeat(4, 1fr)' }}
             gap='4'
           >
@@ -529,7 +404,34 @@ export function SelfHealingPage() {
 
       {/* Floating Action Button */}
       <Portal>
-        <Box position='fixed' bottom='8' right='8' zIndex='1000'>
+        <Box
+          position='fixed'
+          bottom='8'
+          right='8'
+          zIndex='1000'
+          display='flex'
+          flexDirection='column'
+          gap='3'
+        >
+          <Tooltip content='Configure auto repair' showArrow>
+            <Button
+              size='lg'
+              height='14'
+              width='14'
+              rounded='full'
+              boxShadow='0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)'
+              onClick={() => setIsAutoRepairDialogOpen(true)}
+              bg={activeBrain.auto_repair_enabled ? 'teal.500' : 'slate.700'}
+              _hover={{
+                bg: activeBrain.auto_repair_enabled ? 'teal.400' : 'slate.600',
+                transform: 'scale(1.05)',
+              }}
+              transition='all 0.2s'
+            >
+              <RefreshCw size={22} color='white' />
+            </Button>
+          </Tooltip>
+
           <Tooltip content='Run all pending repair tasks' showArrow>
             <Button
               size='lg'
@@ -548,6 +450,180 @@ export function SelfHealingPage() {
           </Tooltip>
         </Box>
       </Portal>
+
+      <DialogRoot
+        open={isAutoRepairDialogOpen}
+        onOpenChange={(details) => {
+          setIsAutoRepairDialogOpen(details.open);
+          if (!details.open && activeBrain) syncAutoRepairForm(activeBrain);
+        }}
+        size='md'
+        placement='center'
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle color='white'>Auto Repair Settings</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <Stack gap='5'>
+              <Text fontSize='sm' color='slate.400'>
+                Configure scheduled self-healing for{' '}
+                <strong>{activeBrain.name}</strong>.
+              </Text>
+
+              <Checkbox.Root
+                checked={!!autoRepairForm?.enabled}
+                onCheckedChange={(details) =>
+                  setAutoRepairForm((current) =>
+                    current
+                      ? {
+                          ...current,
+                          enabled: details.checked === true,
+                        }
+                      : current,
+                  )
+                }
+              >
+                <Checkbox.HiddenInput />
+                <Checkbox.Control />
+                <Checkbox.Label color='white'>
+                  Enable auto repair
+                </Checkbox.Label>
+              </Checkbox.Root>
+
+              <Checkbox.Root
+                checked={!!autoRepairForm?.safeOnly}
+                disabled={!autoRepairForm?.enabled}
+                onCheckedChange={(details) =>
+                  setAutoRepairForm((current) =>
+                    current
+                      ? {
+                          ...current,
+                          safeOnly: details.checked === true,
+                        }
+                      : current,
+                  )
+                }
+              >
+                <Checkbox.HiddenInput />
+                <Checkbox.Control />
+                <Checkbox.Label color='white'>Safe repairs only</Checkbox.Label>
+              </Checkbox.Root>
+
+              {autoRepairForm?.enabled && !autoRepairForm?.safeOnly && (
+                <Stack gap='2' pl='1'>
+                  <Text fontSize='sm' color='white'>
+                    Repair types to run
+                  </Text>
+                  <Text fontSize='xs' color='slate.500'>
+                    Leave all unchecked to run every available type.
+                  </Text>
+                  {RUNNABLE_REPAIR_TYPES.map((type) => (
+                    <Checkbox.Root
+                      key={type}
+                      checked={autoRepairForm.allowedTypes.includes(type)}
+                      onCheckedChange={(details) =>
+                        setAutoRepairForm((current) =>
+                          current
+                            ? {
+                                ...current,
+                                allowedTypes:
+                                  details.checked === true
+                                    ? [...current.allowedTypes, type]
+                                    : current.allowedTypes.filter(
+                                        (t) => t !== type,
+                                      ),
+                              }
+                            : current,
+                        )
+                      }
+                    >
+                      <Checkbox.HiddenInput />
+                      <Checkbox.Control />
+                      <Checkbox.Label color='white' textTransform='capitalize'>
+                        {type.split('_').join(' ')}
+                      </Checkbox.Label>
+                    </Checkbox.Root>
+                  ))}
+                </Stack>
+              )}
+
+              <Field
+                label='Repair frequency'
+                helperText='How often scheduled auto-repair should run.'
+              >
+                <NativeSelect.Root disabled={!autoRepairForm?.enabled}>
+                  <NativeSelect.Field
+                    value={autoRepairForm?.frequencyMinutes ?? '60'}
+                    onChange={(event) =>
+                      setAutoRepairForm((current) =>
+                        current
+                          ? {
+                              ...current,
+                              frequencyMinutes: event.target.value,
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    {frequencyOptions.map((minutes) => (
+                      <option key={minutes} value={String(minutes)}>
+                        {minutes < 60
+                          ? `Every ${minutes} minutes`
+                          : minutes === 60
+                            ? 'Every hour'
+                            : minutes < 1440
+                              ? `Every ${minutes / 60} hours`
+                              : 'Every day'}
+                      </option>
+                    ))}
+                  </NativeSelect.Field>
+                </NativeSelect.Root>
+              </Field>
+
+              <Stack gap='1'>
+                <Text fontSize='xs' color='slate.500'>
+                  {activeBrain.last_auto_repair_at
+                    ? `Last auto-repair run: ${new Date(activeBrain.last_auto_repair_at).toLocaleString()}`
+                    : 'No auto-repair run has been recorded yet.'}
+                </Text>
+                <Text fontSize='xs' color='slate.500'>
+                  {autoRepairForm?.enabled
+                    ? `Scheduled for every ${parsedFrequency} minute${parsedFrequency === 1 ? '' : 's'}.`
+                    : 'Automatic repair is currently disabled.'}
+                </Text>
+              </Stack>
+            </Stack>
+          </DialogBody>
+          <DialogFooter gap='3'>
+            <DialogActionTrigger asChild>
+              <Button variant='outline'>Cancel</Button>
+            </DialogActionTrigger>
+            <Button
+              onClick={() => {
+                if (!autoRepairForm) return;
+                updateBrainMutation.mutate(
+                  {
+                    id: activeBrain.id,
+                    auto_repair_enabled: autoRepairForm.enabled,
+                    auto_repair_safe_only: autoRepairForm.safeOnly,
+                    auto_repair_allowed_types: autoRepairForm.allowedTypes,
+                    auto_repair_frequency_minutes: parsedFrequency,
+                  },
+                  {
+                    onSuccess: () => setIsAutoRepairDialogOpen(false),
+                  },
+                );
+              }}
+              loading={updateBrainMutation.isPending}
+              disabled={!autoRepairDirty}
+            >
+              Save auto-repair
+            </Button>
+          </DialogFooter>
+          <DialogCloseTrigger />
+        </DialogContent>
+      </DialogRoot>
 
       {/* Confirmation Dialog */}
       <DialogRoot
