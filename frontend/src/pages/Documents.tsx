@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Flex, Stack, Text } from '@chakra-ui/react';
+import { Box, Flex, Stack, Text, VStack } from '@chakra-ui/react';
 
 import { deleteDocument, listDocuments, retryDocument } from '../api/documents';
-import { ConfirmDocumentDeleteDialog } from '../components/documents/ConfirmDocumentDeleteDialog';
 import { DocumentList } from '../components/ingest/DocumentList';
 import { Card } from '../components/common/Card';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { LoadingState } from '../components/common/LoadingState';
 import { useActiveBrain } from '../context/useActiveBrain';
 
@@ -67,8 +67,8 @@ export function DocumentsPage() {
       : null;
 
   return (
-    <>
-      <Flex h='full' p={6}>
+    <VStack gap={6} align='stretch' h='full' minH='0' overflow='hidden' pl={6}>
+      <Flex flex='1' minH='0' overflow='hidden'>
         <DocumentList
           documents={data}
           onRetry={async (id) => {
@@ -80,12 +80,19 @@ export function DocumentsPage() {
             setPendingDeleteDocument({ id, title: document.title });
           }}
           busyDocumentId={busyDocumentId}
-          maxHeight='calc(100dvh - 220px)'
         />
       </Flex>
 
-      <ConfirmDocumentDeleteDialog
-        documentTitle={pendingDeleteDocument?.title ?? 'this document'}
+      <ConfirmDialog
+        title='Delete Document'
+        description={
+          <>
+            Are you sure you want to delete{' '}
+            <strong>{pendingDeleteDocument?.title ?? 'this document'}</strong>?
+            This action cannot be undone.
+          </>
+        }
+        confirmLabel='Delete document'
         isOpen={!!pendingDeleteDocument}
         isDeleting={deleteMutation.isPending}
         onOpenChange={(open) => {
@@ -98,6 +105,6 @@ export function DocumentsPage() {
           void deleteMutation.mutateAsync(pendingDeleteDocument.id);
         }}
       />
-    </>
+    </VStack>
   );
 }

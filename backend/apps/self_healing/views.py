@@ -1,4 +1,5 @@
-from rest_framework import generics
+from rest_framework import generics, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -36,6 +37,15 @@ class SelfHealingIgnoreTaskView(APIView):
         task.status = SelfHealingTask.STATUS_IGNORED
         task.save(update_fields=["status", "updated_at"])
         return Response(SelfHealingTaskSerializer(task).data)
+
+
+class SelfHealingDeleteTaskView(APIView):
+    def delete(self, request, pk: int):
+        task = SelfHealingTask.objects.get(id=pk)
+        if task.status != SelfHealingTask.STATUS_PENDING:
+            raise ValidationError("Only pending self-healing tasks can be deleted.")
+        task.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class SelfHealingRunAllView(APIView):

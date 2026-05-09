@@ -7,6 +7,7 @@ import {
   useMemo,
 } from 'react';
 import {
+  Alert,
   Box,
   Flex,
   Input,
@@ -15,15 +16,18 @@ import {
   Text,
   Spinner,
   Stack,
+  HStack,
 } from '@chakra-ui/react';
 import { Send, MessageSquare } from 'lucide-react';
 
 import type { ChatMessage } from '../../api/types';
 import { Card } from '../common/Card';
+import { MetaChip } from '../common/MetaChip';
 import { MessageBubble } from './MessageBubble';
 
 export function ChatWindow({
   messages,
+  hasDocuments,
   pendingQuestion,
   streamingAnswer,
   selectedAssistantMessageId,
@@ -32,6 +36,7 @@ export function ChatWindow({
   loading,
 }: {
   messages: ChatMessage[];
+  hasDocuments: boolean;
   pendingQuestion: string | null;
   streamingAnswer: string;
   selectedAssistantMessageId: number | null;
@@ -87,14 +92,46 @@ export function ChatWindow({
 
   return (
     <Card
+      variant='panel'
       display='flex'
       flexDirection='column'
       h='full'
-      bg='slate.950'
-      borderColor='slate.800'
       p={0}
       overflow='hidden'
     >
+      <Box px='6' py='4' borderBottom='1px solid' borderColor='whiteAlpha.100'>
+        <Stack gap='3'>
+          <HStack justify='flex-end' gap='3' wrap='wrap'>
+            <HStack gap='2'>
+              <MetaChip label='messages' value={String(messages.length)} />
+              <MetaChip
+                label='status'
+                value={loading ? 'streaming' : 'ready'}
+              />
+            </HStack>
+          </HStack>
+
+          {!hasDocuments ? (
+            <Alert.Root
+              status='warning'
+              borderRadius='xl'
+              bg='rgba(245, 158, 11, 0.12)'
+              border='1px solid'
+              borderColor='rgba(245, 158, 11, 0.28)'
+            >
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>No documents uploaded yet</Alert.Title>
+                <Alert.Description>
+                  Upload documents to this brain before relying on chat
+                  responses. Without source material, answers may be limited.
+                </Alert.Description>
+              </Alert.Content>
+            </Alert.Root>
+          ) : null}
+        </Stack>
+      </Box>
+
       <Box ref={scrollRef} flex='1' overflowY='auto' p={6}>
         <Stack gap='6' align='stretch'>
           {!messages.length && !pendingQuestion && !loading && (
@@ -138,18 +175,22 @@ export function ChatWindow({
         </Stack>
       </Box>
 
-      <Box p={4} borderTop='1px' borderColor='slate.800' bg='slate.900'>
+      <Box
+        p={4}
+        borderTop='1px solid'
+        borderColor='whiteAlpha.100'
+        bg='rgba(8, 17, 33, 0.72)'
+      >
         <form onSubmit={handleSubmit}>
           <Flex
             gap='2'
-            bg='slate.950'
-            borderRadius='xl'
-            border='1px'
-            borderColor='slate.700'
-            p='1.5'
+            className='arctic-glass'
+            borderRadius='2xl'
+            p='2'
+            align='center'
           >
             <Input
-              placeholder='Ask anything...'
+              placeholder='Ask the active brain for intelligence...'
               variant='flushed'
               border='none'
               px='3'
@@ -161,10 +202,12 @@ export function ChatWindow({
             />
             <IconButton
               aria-label='Send message'
-              colorPalette='brand'
               disabled={loading || !question.trim()}
               type='submit'
-              borderRadius='lg'
+              borderRadius='xl'
+              bg='signal.500'
+              color='white'
+              _hover={{ bg: 'signal.400' }}
             >
               {loading ? <Spinner size='xs' /> : <Send size={16} />}
             </IconButton>

@@ -8,12 +8,14 @@ export function TaskList({
   onSelect,
   onRun,
   onIgnore,
+  onDelete,
 }: {
   tasks: SelfHealingTask[];
   selectedTaskId: number | null;
   onSelect: (id: number) => void;
   onRun: (id: number) => Promise<void>;
   onIgnore: (id: number) => Promise<void>;
+  onDelete: (id: number) => Promise<void>;
 }) {
   return (
     <Stack gap={3} pl={6} pb={2}>
@@ -26,6 +28,7 @@ export function TaskList({
             onSelect={onSelect}
             onRun={onRun}
             onIgnore={onIgnore}
+            onDelete={onDelete}
           />
         ))}
       </VStack>

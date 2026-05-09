@@ -1,19 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Brain as BrainIcon, Save } from 'lucide-react';
-import {
-  Heading,
-  Text,
-  Stack,
-  HStack,
-  Box,
-  Icon,
-  Input,
-  Textarea,
-  SimpleGrid,
-  Flex,
-  Portal,
-} from '@chakra-ui/react';
+import { Plus } from 'lucide-react';
+import { Stack, Box, SimpleGrid, Flex, Portal } from '@chakra-ui/react';
 import {
   getBrains,
   createBrain,
@@ -21,25 +9,21 @@ import {
   deleteBrain,
   type Brain,
 } from '../api/brains';
-import { Card } from '../components/common/Card';
 import { Button } from '../components/common/Button';
+import { BrainEditorDialog } from '../components/common/BrainEditorDialog';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { LoadingState } from '../components/common/LoadingState';
-import { Field } from '../components/ui/field';
-import {
-  DialogBody,
-  DialogCloseTrigger,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogRoot,
-  DialogTitle,
-} from '../components/ui/dialog';
+import { BrainCard } from '../components/brains/BrainCard';
 import { Tooltip } from '../components/ui/tooltip';
 
 export function BrainsPage() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingDeleteBrain, setPendingDeleteBrain] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [formData, setFormData] = useState({ name: '', description: '' });
 
   const { data: brains, isLoading } = useQuery({
@@ -74,6 +58,7 @@ export function BrainsPage() {
     mutationFn: (id: string) => deleteBrain(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brains'] });
+      setPendingDeleteBrain(null);
     },
   });
 
@@ -95,6 +80,10 @@ export function BrainsPage() {
     setFormData({ name: '', description: '' });
   };
 
+  const handleDeleteRequest = (brain: Brain) => {
+    setPendingDeleteBrain({ id: brain.id, name: brain.name });
+  };
+
   const handleSubmit = () => {
     if (editingId) {
       updateMutation.mutate(editingId);
@@ -106,56 +95,32 @@ export function BrainsPage() {
   if (isLoading) return <LoadingState label='Loading knowledge brains...' />;
 
   return (
-    <Stack gap='6' h='full' minH='0' p='6' position='relative'>
+    <Stack gap='6' h='full' minH='0' position='relative'>
       <Flex
         flexDirection={'column'}
         gap={6}
         overflowY='auto'
-        px={6}
+        px={2}
         pb={6}
         pr={1}
         w={'100%'}
       >
-        <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} gap='6' w={'full'}>
+        <SimpleGrid
+          columns={{ base: 1, md: 2, xl: 3 }}
+          p='6'
+          gap='6'
+          w={'full'}
+        >
           {brains?.map((brain) => (
-            <Card key={brain.id}>
-              <Stack gap='4'>
-                <HStack justify='space-between' align='flex-start'>
-                  <HStack gap='3'>
-                    <Icon as={BrainIcon} color='brand.400' h='5' w='5' />
-                    <Heading size='md' color='white'>
-                      {brain.name}
-                    </Heading>
-                  </HStack>
-                  <HStack gap='1'>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      onClick={() => handleEdit(brain)}
-                      px='2'
-                    >
-                      <Pencil size={14} />
-                    </Button>
-                    <Button
-                      variant='ghost'
-                      size='sm'
-                      colorPalette='red'
-                      onClick={() => deleteMutation.mutate(brain.id)}
-                      loading={
-                        deleteMutation.isPending &&
-                        deleteMutation.variables === brain.id
-                      }
-                      px='2'
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </HStack>
-                </HStack>
-                <Text fontSize='sm' color='slate.400' lineClamp={3}>
-                  {brain.description || 'No description provided.'}
-                </Text>
-              </Stack>
-            </Card>
+            <BrainCard
+              key={brain.id}
+              brain={brain}
+              onEdit={() => handleEdit(brain)}
+              onDelete={() => handleDeleteRequest(brain)}
+              deleting={
+                deleteMutation.isPending && pendingDeleteBrain?.id === brain.id
+              }
+            />
           ))}
         </SimpleGrid>
       </Flex>
@@ -165,15 +130,11 @@ export function BrainsPage() {
         <Box position='fixed' bottom='8' right='8' zIndex='1000'>
           <Tooltip content='Create a new knowledge brain' showArrow>
             <Button
+              variant='floating'
               size='lg'
               height='14'
               width='14'
-              rounded='full'
-              boxShadow='0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)'
               onClick={handleAdd}
-              bg='brand.500'
-              _hover={{ bg: 'brand.400', transform: 'scale(1.05)' }}
-              transition='all 0.2s'
             >
               <Plus size={24} color='white' />
             </Button>
@@ -181,65 +142,42 @@ export function BrainsPage() {
         </Box>
       </Portal>
 
-      <DialogRoot
-        open={isDialogOpen}
-        onOpenChange={(details) => !details.open && handleCancel()}
-        size='md'
-        placement='center'
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle color='white'>
-              {editingId
-                ? 'Edit Knowledge Brain'
-                : 'Create New Knowledge Brain'}
-            </DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <Stack gap='4'>
-              <Field label='Name'>
-                <Input
-                  autoFocus
-                  value={formData.name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, name: e.target.value })
-                  }
-                  placeholder='Marketing Docs, Project X...'
-                  bg='slate.950'
-                  borderColor='slate.700'
-                />
-              </Field>
-              <Field label='Description'>
-                <Textarea
-                  rows={3}
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder='Specify what kind of knowledge this brain handles...'
-                  bg='slate.950'
-                  borderColor='slate.700'
-                />
-              </Field>
-            </Stack>
-          </DialogBody>
-          <DialogFooter gap='3'>
-            <Button variant='outline' onClick={handleCancel}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              loading={createMutation.isPending || updateMutation.isPending}
-            >
-              <HStack gap='2'>
-                <Save size={16} />
-                <Text>Save Brain</Text>
-              </HStack>
-            </Button>
-          </DialogFooter>
-          <DialogCloseTrigger />
-        </DialogContent>
-      </DialogRoot>
+      <ConfirmDialog
+        title='Delete Brain'
+        description={
+          <>
+            Are you sure you want to delete{' '}
+            <strong>{pendingDeleteBrain?.name ?? 'this brain'}</strong>? This
+            action cannot be undone.
+          </>
+        }
+        confirmLabel='Delete brain'
+        isOpen={!!pendingDeleteBrain}
+        isDeleting={deleteMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteBrain(null);
+          }
+        }}
+        onConfirm={() => {
+          if (!pendingDeleteBrain) return;
+          deleteMutation.mutate(pendingDeleteBrain.id);
+        }}
+      />
+
+      <BrainEditorDialog
+        isOpen={isDialogOpen}
+        editing={!!editingId}
+        formData={formData}
+        isSaving={createMutation.isPending || updateMutation.isPending}
+        onNameChange={(value) => setFormData({ ...formData, name: value })}
+        onDescriptionChange={(value) =>
+          setFormData({ ...formData, description: value })
+        }
+        onOpenChange={setIsDialogOpen}
+        onSubmit={handleSubmit}
+        onCancel={handleCancel}
+      />
     </Stack>
   );
 }

@@ -1,58 +1,21 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Badge, Box, HStack, Stack, Text } from '@chakra-ui/react';
+import { Box, Stack, Text } from '@chakra-ui/react';
 
 import { getBrains } from '../api/brains';
 import type { GraphNode } from '../api/types';
 import { getGraph } from '../api/graph';
-import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { EmptyState } from '../components/common/EmptyState';
 // import { KnowledgeGraphView } from 'components/graph/KnowledgeGraphView';
 import { ElkKnowledgeGraphView } from '../components/graph/ElkKnowledgeGraphView';
 // import { GraphLegend } from '../components/graph/GraphLegend';
+import { GraphTabBar } from '../components/graph/GraphTabBar';
 import { IsolatedEntitiesPanel } from '../components/graph/IsolatedEntitiesPanel';
 import { LoadingState } from '../components/common/LoadingState';
 import { useActiveBrain } from '../context/useActiveBrain';
 
 type GraphTab = 'graph' | 'isolated';
-
-function TabButton({
-  active,
-  count,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  count: number;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      variant={active ? 'solid' : 'outline'}
-      onClick={onClick}
-      borderColor={active ? undefined : 'slate.700'}
-      color={active ? undefined : 'slate.200'}
-      bg={active ? 'brand.500' : 'slate.900'}
-      _hover={{
-        bg: active ? 'brand.400' : 'slate.800',
-      }}
-    >
-      <HStack gap='2'>
-        <Text>{label}</Text>
-        <Badge
-          bg={active ? 'rgba(255,255,255,0.18)' : 'slate.800'}
-          color={active ? 'white' : 'slate.300'}
-          borderRadius='full'
-          px='2'
-        >
-          {count}
-        </Badge>
-      </HStack>
-    </Button>
-  );
-}
 
 export function KnowledgeGraphPage() {
   const { activeBrainId } = useActiveBrain();
@@ -80,6 +43,9 @@ export function KnowledgeGraphPage() {
           },
     [data],
   );
+  const hasAnyGraphData =
+    partitioned.connectedGraph.nodes.length > 0 ||
+    partitioned.isolatedEntities.length > 0;
 
   if (brainsQuery.isLoading) {
     return <LoadingState label='Loading brains...' />;
@@ -104,9 +70,16 @@ export function KnowledgeGraphPage() {
     <Stack gap='6' h='full' p={6}>
       {isLoading || !data ? (
         <LoadingState label='Loading graph...' />
+      ) : !hasAnyGraphData ? (
+        <Box>
+          <EmptyState
+            title='No graph data for this brain'
+            body='Ingest more material into this brain to extract entities and relationships for the knowledge graph.'
+          />
+        </Box>
       ) : (
         <>
-          <Card py={3}>
+          <Card variant='panel' py={3}>
             <Stack
               direction={{ base: 'column', md: 'row' }}
               gap='4'
@@ -123,20 +96,12 @@ export function KnowledgeGraphPage() {
                   graph stays readable.
                 </Text>
               </Box>
-              <HStack gap='3' wrap='wrap'>
-                <TabButton
-                  active={tab === 'graph'}
-                  label='Graph'
-                  count={partitioned.connectedGraph.nodes.length}
-                  onClick={() => setTab('graph')}
-                />
-                <TabButton
-                  active={tab === 'isolated'}
-                  label='Isolated Entities'
-                  count={partitioned.isolatedEntities.length}
-                  onClick={() => setTab('isolated')}
-                />
-              </HStack>
+              <GraphTabBar
+                tab={tab}
+                connectedCount={partitioned.connectedGraph.nodes.length}
+                isolatedCount={partitioned.isolatedEntities.length}
+                onTabChange={setTab}
+              />
             </Stack>
           </Card>
 

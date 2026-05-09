@@ -4,7 +4,7 @@ import { Card } from '../common/Card';
 export function KnowledgeGapPanel({ gaps }: { gaps: string[] }) {
   if (!gaps.length) return null;
   return (
-    <Card shadow='none'>
+    <Card variant='panel' shadow='none'>
       <Heading size='sm' color='white' mb='3'>
         Knowledge gaps
       </Heading>

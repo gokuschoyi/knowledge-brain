@@ -68,6 +68,11 @@ class ChunkSerializer(serializers.ModelSerializer):
 
 class DocumentSerializer(serializers.ModelSerializer):
     chunks_count = serializers.IntegerField(source="chunks.count", read_only=True)
+    source_label = serializers.CharField(source="get_source_type_display", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    brain_name = serializers.CharField(source="brain.name", read_only=True)
+    latest_job_status = serializers.SerializerMethodField()
+    latest_activity_at = serializers.DateTimeField(source="updated_at", read_only=True)
 
     class Meta:
         model = Document
@@ -75,17 +80,26 @@ class DocumentSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "source_type",
+            "source_label",
             "tags",
             "llm_provider",
             "llm_model",
             "summary",
             "status",
+            "status_label",
             "quality_score",
             "error_message",
             "created_at",
             "updated_at",
+            "latest_activity_at",
             "chunks_count",
+            "brain_name",
+            "latest_job_status",
         ]
+
+    def get_latest_job_status(self, obj):
+        latest_job = obj.ingestion_jobs.order_by("-created_at").first()
+        return latest_job.status if latest_job else None
 
 
 class IngestionJobSerializer(serializers.ModelSerializer):

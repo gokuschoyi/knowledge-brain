@@ -1,44 +1,29 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Box,
-  Checkbox,
-  Grid,
-  Heading,
-  NativeSelect,
-  Stack,
-  Text,
-  Portal,
-  Flex,
-} from '@chakra-ui/react';
-import { Filter, Play, RefreshCw, X } from 'lucide-react';
+import { Box, Grid, Stack, Text } from '@chakra-ui/react';
 
 import {
+  deleteSelfHealingTask,
   ignoreSelfHealingTask,
   listSelfHealingTasks,
   runAllSelfHealingTasks,
   runSelfHealingTask,
 } from '../api/selfHealing';
 import { getBrains, updateBrain } from '../api/brains';
+import {
+  AutoRepairSettingsDialog,
+  type AutoRepairFormState,
+} from '../components/common/AutoRepairSettingsDialog';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
 import { TaskList } from '../components/selfHealing/TaskList';
 import { RepairResultPanel } from '../components/selfHealing/RepairResultPanel';
+import { SelfHealingMetrics } from '../components/selfHealing/SelfHealingMetrics';
+import { TaskTypeFilterBar } from '../components/selfHealing/TaskTypeFilterBar';
+import { SelfHealingFab } from '../components/selfHealing/SelfHealingFab';
 import { Card } from '../components/common/Card';
-import { Button } from '../components/common/Button';
 import { useActiveBrain } from '../context/useActiveBrain';
-import { Tooltip } from '../components/ui/tooltip';
-import { Field } from '../components/ui/field';
-import {
-  DialogBody,
-  DialogCloseTrigger,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogRoot,
-  DialogTitle,
-  DialogActionTrigger,
-} from '../components/ui/dialog';
 import type { SelfHealingTask } from '../api/types';
 import type { Brain } from '../api/brains';
 
@@ -57,6 +42,10 @@ export function SelfHealingPage() {
   const [activeTaskTypeFilter, setActiveTaskTypeFilter] = useState<
     string | null
   >(null);
+  const [pendingDeleteTask, setPendingDeleteTask] = useState<{
+    id: number;
+    title: string;
+  } | null>(null);
   const [selectionState, setSelectionState] = useState<{
     brainId: string;
     selectedTaskId: number | null;
@@ -64,13 +53,8 @@ export function SelfHealingPage() {
     brainId: activeBrainId,
     selectedTaskId: null,
   });
-  const [autoRepairForm, setAutoRepairForm] = useState<{
-    brainId: string;
-    enabled: boolean;
-    safeOnly: boolean;
-    allowedTypes: string[];
-    frequencyMinutes: string;
-  } | null>(null);
+  const [autoRepairForm, setAutoRepairForm] =
+    useState<AutoRepairFormState>(null);
   const queryClient = useQueryClient();
   const brainsQuery = useQuery({
     queryKey: ['brains'],
@@ -104,6 +88,13 @@ export function SelfHealingPage() {
     mutationFn: ignoreSelfHealingTask,
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ['self-healing'] }),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: deleteSelfHealingTask,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['self-healing'] });
+      setPendingDeleteTask(null);
+    },
   });
   const runAllMutation = useMutation({
     mutationFn: () => runAllSelfHealingTasks(activeBrainId || null),
@@ -265,107 +256,23 @@ export function SelfHealingPage() {
         ));
 
   return (
-    <Stack gap='6' pb={6} h='full' minH='0' position='relative'>
+    <Stack gap='6' h='full' minH='0' position='relative'>
       {tasks.length ? (
         <>
-          <Grid
-            px={6}
-            pt={6}
-            templateColumns={{ base: '1fr 1fr', xl: 'repeat(4, 1fr)' }}
-            gap='4'
-          >
-            <Card px={4} py={3}>
-              <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
-                Pending
-              </Text>
-              <Heading size='lg' color='orange.300'>
-                {summary.pending}
-              </Heading>
-            </Card>
-            <Card px={4} py={3}>
-              <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
-                Running
-              </Text>
-              <Heading size='lg' color='blue.300'>
-                {summary.running}
-              </Heading>
-            </Card>
-            <Card px={4} py={3}>
-              <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
-                Completed
-              </Text>
-              <Heading size='lg' color='green.300'>
-                {summary.completed}
-              </Heading>
-            </Card>
-            <Card px={4} py={3}>
-              <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
-                Failed
-              </Text>
-              <Heading size='lg' color='red.300'>
-                {summary.failed}
-              </Heading>
-            </Card>
-          </Grid>
+          <Box px={6} pt={6}>
+            <SelfHealingMetrics summary={summary} />
+          </Box>
 
-          {taskTypes.length > 0 && (
-            <Flex px={6} gap='2' wrap='wrap' align='center'>
-              <Flex align='center' gap='2' mr='2'>
-                <Filter size={14} color='#64748b' />
-                <Text
-                  fontSize='xs'
-                  fontWeight='bold'
-                  color='slate.500'
-                  textTransform='uppercase'
-                  letterSpacing='wider'
-                >
-                  Filter by type
-                </Text>
-              </Flex>
-
-              <Button
-                size='xs'
-                variant={activeTaskTypeFilter === null ? 'solid' : 'ghost'}
-                onClick={() => setActiveTaskTypeFilter(null)}
-                rounded='full'
-                px='3'
-              >
-                All
-              </Button>
-
-              {taskTypes.map((type) => (
-                <Button
-                  key={type}
-                  size='xs'
-                  variant={activeTaskTypeFilter === type ? 'solid' : 'ghost'}
-                  onClick={() => setActiveTaskTypeFilter(type)}
-                  rounded='full'
-                  px='3'
-                  textTransform='capitalize'
-                >
-                  {type.split('_').join(' ')}
-                </Button>
-              ))}
-
-              {activeTaskTypeFilter && (
-                <Tooltip content='Clear filter'>
-                  <Box
-                    as='button'
-                    onClick={() => setActiveTaskTypeFilter(null)}
-                    p='1'
-                    rounded='full'
-                    _hover={{ bg: 'whiteAlpha.100' }}
-                    color='slate.400'
-                  >
-                    <X size={14} />
-                  </Box>
-                </Tooltip>
-              )}
-            </Flex>
-          )}
+          <Box px={6}>
+            <TaskTypeFilterBar
+              taskTypes={taskTypes}
+              activeFilter={activeTaskTypeFilter}
+              onFilterChange={setActiveTaskTypeFilter}
+            />
+          </Box>
         </>
       ) : (
-        <Box px={6} pb={6}>
+        <Box px={6} py={6}>
           <EmptyState
             title='No repair tasks for this brain'
             body='Ingest more material or ask low-confidence questions in this brain to generate self-healing work.'
@@ -373,291 +280,128 @@ export function SelfHealingPage() {
         </Box>
       )}
 
-      <Grid
-        templateColumns={{ base: '1fr', xl: 'minmax(0, 1.2fr) 380px' }}
-        gap='6'
-        flex='1'
-        minH='0'
-      >
-        <Box minH='0' overflowY='auto' pr='1'>
-          <TaskList
-            tasks={tasks}
-            selectedTaskId={selectedTask?.id ?? null}
-            onSelect={(taskId) => {
-              setSelectionState({
-                brainId: activeBrainId,
-                selectedTaskId: taskId,
-              });
-            }}
-            onRun={async (id) => {
-              await runMutation.mutateAsync(id);
-            }}
-            onIgnore={async (id) => {
-              await ignoreMutation.mutateAsync(id);
-            }}
-          />
-        </Box>
-        <Box minH='0' overflowY='auto' pr='6'>
-          <RepairResultPanel task={selectedTask} />
-        </Box>
-      </Grid>
-
-      {/* Floating Action Button */}
-      <Portal>
-        <Box
-          position='fixed'
-          bottom='8'
-          right='8'
-          zIndex='1000'
-          display='flex'
-          flexDirection='column'
-          gap='3'
+      {tasks.length ? (
+        <Grid
+          templateColumns={{ base: '1fr', xl: 'minmax(0, 1.2fr) 380px' }}
+          gap='6'
+          flex='1'
+          minH='0'
+          pb={6}
         >
-          <Tooltip content='Configure auto repair' showArrow>
-            <Button
-              size='lg'
-              height='14'
-              width='14'
-              rounded='full'
-              boxShadow='0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)'
-              onClick={() => setIsAutoRepairDialogOpen(true)}
-              bg={activeBrain.auto_repair_enabled ? 'teal.500' : 'slate.700'}
-              _hover={{
-                bg: activeBrain.auto_repair_enabled ? 'teal.400' : 'slate.600',
-                transform: 'scale(1.05)',
+          <Box minH='0' overflowY='auto' pr='1' pt={2}>
+            <TaskList
+              tasks={tasks}
+              selectedTaskId={selectedTask?.id ?? null}
+              onSelect={(taskId) => {
+                setSelectionState({
+                  brainId: activeBrainId,
+                  selectedTaskId: taskId,
+                });
               }}
-              transition='all 0.2s'
-            >
-              <RefreshCw size={22} color='white' />
-            </Button>
-          </Tooltip>
+              onRun={async (id) => {
+                await runMutation.mutateAsync(id);
+              }}
+              onIgnore={async (id) => {
+                await ignoreMutation.mutateAsync(id);
+              }}
+              onDelete={async (id) => {
+                const task = tasks.find((item) => item.id === id);
+                if (!task) return;
+                setPendingDeleteTask({ id, title: task.title });
+              }}
+            />
+          </Box>
+          <Box
+            minH='0'
+            overflow='hidden'
+            pr='6'
+            pt={2}
+            display='flex'
+            flexDirection='column'
+          >
+            <RepairResultPanel task={selectedTask} />
+          </Box>
+        </Grid>
+      ) : null}
 
-          <Tooltip content='Run all pending repair tasks' showArrow>
-            <Button
-              size='lg'
-              height='14'
-              width='14'
-              rounded='full'
-              boxShadow='0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1)'
-              onClick={() => setIsConfirmDialogOpen(true)}
-              bg='brand.500'
-              disabled={!summary.pending}
-              _hover={{ bg: 'brand.400', transform: 'scale(1.05)' }}
-              transition='all 0.2s'
-            >
-              <Play size={24} color='white' />
-            </Button>
-          </Tooltip>
-        </Box>
-      </Portal>
-
-      <DialogRoot
-        open={isAutoRepairDialogOpen}
-        onOpenChange={(details) => {
-          setIsAutoRepairDialogOpen(details.open);
-          if (!details.open && activeBrain) syncAutoRepairForm(activeBrain);
+      <ConfirmDialog
+        title='Delete Repair Task'
+        description={
+          <>
+            Are you sure you want to delete{' '}
+            <strong>{pendingDeleteTask?.title ?? 'this repair task'}</strong>?
+            This pending task will be removed from the repair queue.
+          </>
+        }
+        confirmLabel='Delete task'
+        isOpen={!!pendingDeleteTask}
+        isDeleting={deleteMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteTask(null);
+          }
         }}
-        size='md'
-        placement='center'
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle color='white'>Auto Repair Settings</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <Stack gap='5'>
-              <Text fontSize='sm' color='slate.400'>
-                Configure scheduled self-healing for{' '}
-                <strong>{activeBrain.name}</strong>.
-              </Text>
+        onConfirm={() => {
+          if (!pendingDeleteTask) return;
+          void deleteMutation.mutateAsync(pendingDeleteTask.id);
+        }}
+      />
 
-              <Checkbox.Root
-                checked={!!autoRepairForm?.enabled}
-                onCheckedChange={(details) =>
-                  setAutoRepairForm((current) =>
-                    current
-                      ? {
-                          ...current,
-                          enabled: details.checked === true,
-                        }
-                      : current,
-                  )
-                }
-              >
-                <Checkbox.HiddenInput />
-                <Checkbox.Control />
-                <Checkbox.Label color='white'>
-                  Enable auto repair
-                </Checkbox.Label>
-              </Checkbox.Root>
+      <SelfHealingFab
+        autoRepairEnabled={activeBrain.auto_repair_enabled}
+        pendingCount={summary.pending}
+        onOpenSettings={() => setIsAutoRepairDialogOpen(true)}
+        onRunAll={() => setIsConfirmDialogOpen(true)}
+      />
 
-              <Checkbox.Root
-                checked={!!autoRepairForm?.safeOnly}
-                disabled={!autoRepairForm?.enabled}
-                onCheckedChange={(details) =>
-                  setAutoRepairForm((current) =>
-                    current
-                      ? {
-                          ...current,
-                          safeOnly: details.checked === true,
-                        }
-                      : current,
-                  )
-                }
-              >
-                <Checkbox.HiddenInput />
-                <Checkbox.Control />
-                <Checkbox.Label color='white'>Safe repairs only</Checkbox.Label>
-              </Checkbox.Root>
+      <AutoRepairSettingsDialog
+        isOpen={isAutoRepairDialogOpen}
+        activeBrain={activeBrain}
+        form={autoRepairForm}
+        parsedFrequency={parsedFrequency}
+        frequencyOptions={frequencyOptions}
+        runnableRepairTypes={RUNNABLE_REPAIR_TYPES}
+        isDirty={autoRepairDirty}
+        isSaving={updateBrainMutation.isPending}
+        onOpenChange={(open) => {
+          setIsAutoRepairDialogOpen(open);
+          if (!open && activeBrain) syncAutoRepairForm(activeBrain);
+        }}
+        onFormChange={setAutoRepairForm}
+        onSave={() => {
+          if (!autoRepairForm) return;
+          updateBrainMutation.mutate(
+            {
+              id: activeBrain.id,
+              auto_repair_enabled: autoRepairForm.enabled,
+              auto_repair_safe_only: autoRepairForm.safeOnly,
+              auto_repair_allowed_types: autoRepairForm.allowedTypes,
+              auto_repair_frequency_minutes: parsedFrequency,
+            },
+            {
+              onSuccess: () => setIsAutoRepairDialogOpen(false),
+            },
+          );
+        }}
+      />
 
-              {autoRepairForm?.enabled && !autoRepairForm?.safeOnly && (
-                <Stack gap='2' pl='1'>
-                  <Text fontSize='sm' color='white'>
-                    Repair types to run
-                  </Text>
-                  <Text fontSize='xs' color='slate.500'>
-                    Leave all unchecked to run every available type.
-                  </Text>
-                  {RUNNABLE_REPAIR_TYPES.map((type) => (
-                    <Checkbox.Root
-                      key={type}
-                      checked={autoRepairForm.allowedTypes.includes(type)}
-                      onCheckedChange={(details) =>
-                        setAutoRepairForm((current) =>
-                          current
-                            ? {
-                                ...current,
-                                allowedTypes:
-                                  details.checked === true
-                                    ? [...current.allowedTypes, type]
-                                    : current.allowedTypes.filter(
-                                        (t) => t !== type,
-                                      ),
-                              }
-                            : current,
-                        )
-                      }
-                    >
-                      <Checkbox.HiddenInput />
-                      <Checkbox.Control />
-                      <Checkbox.Label color='white' textTransform='capitalize'>
-                        {type.split('_').join(' ')}
-                      </Checkbox.Label>
-                    </Checkbox.Root>
-                  ))}
-                </Stack>
-              )}
-
-              <Field
-                label='Repair frequency'
-                helperText='How often scheduled auto-repair should run.'
-              >
-                <NativeSelect.Root disabled={!autoRepairForm?.enabled}>
-                  <NativeSelect.Field
-                    value={autoRepairForm?.frequencyMinutes ?? '60'}
-                    onChange={(event) =>
-                      setAutoRepairForm((current) =>
-                        current
-                          ? {
-                              ...current,
-                              frequencyMinutes: event.target.value,
-                            }
-                          : current,
-                      )
-                    }
-                  >
-                    {frequencyOptions.map((minutes) => (
-                      <option key={minutes} value={String(minutes)}>
-                        {minutes < 60
-                          ? `Every ${minutes} minutes`
-                          : minutes === 60
-                            ? 'Every hour'
-                            : minutes < 1440
-                              ? `Every ${minutes / 60} hours`
-                              : 'Every day'}
-                      </option>
-                    ))}
-                  </NativeSelect.Field>
-                </NativeSelect.Root>
-              </Field>
-
-              <Stack gap='1'>
-                <Text fontSize='xs' color='slate.500'>
-                  {activeBrain.last_auto_repair_at
-                    ? `Last auto-repair run: ${new Date(activeBrain.last_auto_repair_at).toLocaleString()}`
-                    : 'No auto-repair run has been recorded yet.'}
-                </Text>
-                <Text fontSize='xs' color='slate.500'>
-                  {autoRepairForm?.enabled
-                    ? `Scheduled for every ${parsedFrequency} minute${parsedFrequency === 1 ? '' : 's'}.`
-                    : 'Automatic repair is currently disabled.'}
-                </Text>
-              </Stack>
-            </Stack>
-          </DialogBody>
-          <DialogFooter gap='3'>
-            <DialogActionTrigger asChild>
-              <Button variant='outline'>Cancel</Button>
-            </DialogActionTrigger>
-            <Button
-              onClick={() => {
-                if (!autoRepairForm) return;
-                updateBrainMutation.mutate(
-                  {
-                    id: activeBrain.id,
-                    auto_repair_enabled: autoRepairForm.enabled,
-                    auto_repair_safe_only: autoRepairForm.safeOnly,
-                    auto_repair_allowed_types: autoRepairForm.allowedTypes,
-                    auto_repair_frequency_minutes: parsedFrequency,
-                  },
-                  {
-                    onSuccess: () => setIsAutoRepairDialogOpen(false),
-                  },
-                );
-              }}
-              loading={updateBrainMutation.isPending}
-              disabled={!autoRepairDirty}
-            >
-              Save auto-repair
-            </Button>
-          </DialogFooter>
-          <DialogCloseTrigger />
-        </DialogContent>
-      </DialogRoot>
-
-      {/* Confirmation Dialog */}
-      <DialogRoot
-        open={isConfirmDialogOpen}
-        onOpenChange={(details) => setIsConfirmDialogOpen(details.open)}
-        size='sm'
-        placement='center'
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle color='white'>Confirm Repair Action</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <Text color='slate.300'>
-              Are you sure you want to run all{' '}
-              <strong>{summary.pending}</strong> pending self-healing tasks for{' '}
-              <strong>{activeBrain.name}</strong>?
-            </Text>
-          </DialogBody>
-          <DialogFooter gap='3'>
-            <DialogActionTrigger asChild>
-              <Button variant='outline'>Cancel</Button>
-            </DialogActionTrigger>
-            <Button
-              onClick={() => runAllMutation.mutate()}
-              loading={runAllMutation.isPending}
-              bg='brand.500'
-            >
-              Run fixes
-            </Button>
-          </DialogFooter>
-          <DialogCloseTrigger />
-        </DialogContent>
-      </DialogRoot>
+      <ConfirmDialog
+        title='Confirm Repair Action'
+        description={
+          <>
+            Are you sure you want to run all <strong>{summary.pending}</strong>{' '}
+            pending self-healing tasks for <strong>{activeBrain.name}</strong>?
+          </>
+        }
+        confirmLabel='Run fixes'
+        confirmVariant='signal'
+        isOpen={isConfirmDialogOpen}
+        isDeleting={runAllMutation.isPending}
+        onOpenChange={setIsConfirmDialogOpen}
+        onConfirm={() => {
+          void runAllMutation.mutate();
+        }}
+      />
     </Stack>
   );
 }

@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Flex, Heading, Button, Stack, Text } from '@chakra-ui/react';
-import { History } from 'lucide-react';
+import { Box, Flex, Stack, Text } from '@chakra-ui/react';
 
 import { getBrains } from '../api/brains';
+import { listDocuments } from '../api/documents';
 import { ChatWindow } from '../components/chat/ChatWindow';
+import { ChatHistorySidebar } from '../components/chat/ChatHistorySidebar';
 import { SourcePanel } from '../components/chat/SourcePanel';
 import { KnowledgeGapPanel } from '../components/chat/KnowledgeGapPanel';
 import { LoadingState } from '../components/common/LoadingState';
@@ -102,6 +103,11 @@ export function ChatPage() {
       : createChatUiState(activeBrainId);
 
   const brainsQuery = useQuery({ queryKey: ['brains'], queryFn: getBrains });
+  const documentsQuery = useQuery({
+    queryKey: ['documents', activeBrainId],
+    queryFn: () => listDocuments(activeBrainId || undefined),
+    enabled: !!activeBrainId,
+  });
   const sessionsQuery = useQuery({
     queryKey: ['chat-sessions', activeBrainId],
     queryFn: () => getChatSessions(activeBrainId),
@@ -262,108 +268,40 @@ export function ChatPage() {
       {/* Sidebar - History */}
       <Box w='80' pl={6} py={6} display={{ base: 'none', xl: 'block' }}>
         <Stack gap='6' h='full'>
-          <Box
-            flex='1'
-            p='4'
-            bg='slate.900'
-            borderRadius='xl'
-            borderWidth='1px'
-            borderColor='slate.800'
-            overflow='hidden'
-          >
-            <Heading
-              size='xs'
-              color='slate.500'
-              textTransform='uppercase'
-              mb='4'
-              display='flex'
-              alignItems='center'
-              justifyContent='space-between'
-            >
-              <Flex align='center' gap='2'>
-                <History size={14} /> Recent Research
-              </Flex>
-              <Button
-                size='xs'
-                variant='outline'
-                borderColor='slate.700'
-                color='slate.200'
-                bg='slate.950'
-                _hover={{ bg: 'slate.800' }}
-                disabled={scopedUiState.loading}
-                onClick={() => {
-                  setUiState({
-                    ...createChatUiState(activeBrainId),
-                    brainId: activeBrainId,
-                    isStartingNewChat: true,
-                  });
-                }}
-              >
-                New chat
-              </Button>
-            </Heading>
-            <Text fontSize='xs' color='slate.500' mb='4'>
-              Showing saved chats for {activeBrain.name}.
-            </Text>
-            {sessionsQuery.isLoading ? (
-              <LoadingState label='Loading history...' />
-            ) : !sessionsQuery.data?.length ? (
-              <Flex
-                direction='column'
-                align='center'
-                justify='center'
-                h='40'
-                opacity={0.4}
-              >
-                <Text fontSize='xs' textAlign='center'>
-                  No saved conversations yet
-                </Text>
-              </Flex>
-            ) : (
-              <Stack gap='2'>
-                {sessionsQuery.data.map((session) => {
-                  const isActive = session.id === activeSessionId;
-                  return (
-                    <Button
-                      key={session.id}
-                      justifyContent='flex-start'
-                      variant='ghost'
-                      h='auto'
-                      py='2'
-                      px='3'
-                      bg={isActive ? 'slate.800' : 'transparent'}
-                      borderWidth='1px'
-                      borderColor={isActive ? 'slate.700' : 'transparent'}
-                      _hover={{ bg: 'slate.800' }}
-                      onClick={() => {
-                        setUiState({
-                          ...createChatUiState(activeBrainId),
-                          brainId: activeBrainId,
-                          activeSessionId: session.id,
-                        });
-                      }}
-                    >
-                      <Stack gap='1' align='flex-start' textAlign={'start'}>
-                        <Text fontSize='sm' color='white' lineClamp={2}>
-                          {session.title || 'Untitled conversation'}
-                        </Text>
-                        <Text fontSize='xs' color='slate.500'>
-                          {new Date(session.created_at).toLocaleString()}
-                        </Text>
-                      </Stack>
-                    </Button>
-                  );
-                })}
-              </Stack>
-            )}
-          </Box>
+          <ChatHistorySidebar
+            brainName={activeBrain.name}
+            sessions={sessionsQuery.data ?? []}
+            activeSessionId={activeSessionId}
+            isLoading={sessionsQuery.isLoading}
+            isDisabled={scopedUiState.loading}
+            onNewChat={() => {
+              setUiState({
+                ...createChatUiState(activeBrainId),
+                brainId: activeBrainId,
+                isStartingNewChat: true,
+              });
+            }}
+            onSelectSession={(id) => {
+              setUiState({
+                ...createChatUiState(activeBrainId),
+                brainId: activeBrainId,
+                activeSessionId: id,
+              });
+            }}
+          />
         </Stack>
       </Box>
 
       {/* Main Chat Area */}
-      <Box flex='1' h='full' py={6}>
+      <Box
+        flex='1'
+        h='full'
+        py={6}
+        pr={analysisGaps.length > 0 || analysisSources.length > 0 ? 0 : 6}
+      >
         <ChatWindow
           messages={activeMessages}
+          hasDocuments={(documentsQuery.data?.length ?? 0) > 0}
           pendingQuestion={scopedUiState.pendingQuestion}
           streamingAnswer={scopedUiState.streamingAnswer}
           selectedAssistantMessageId={selectedAssistantMessage?.id ?? null}
@@ -385,7 +323,7 @@ export function ChatPage() {
       {/* Analysis Panel */}
       {(analysisGaps.length > 0 || analysisSources.length > 0) && (
         <Box w='80' pr={6} py={6} display={{ base: 'none', '2xl': 'block' }}>
-          <Stack gap='6' h='full' overflowY='auto' px={2}>
+          <Stack gap='6' h='full' overflowY='auto'>
             <KnowledgeGapPanel gaps={analysisGaps} />
             {analysisSources.length ? (
               <SourcePanel sources={analysisSources} />
