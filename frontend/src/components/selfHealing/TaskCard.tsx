@@ -7,6 +7,7 @@ import {
   HStack,
   Stack,
 } from '@chakra-ui/react';
+import { Trash2 } from 'lucide-react';
 import type { SelfHealingTask } from '../../api/types';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
@@ -19,12 +20,14 @@ export function TaskCard({
   onSelect,
   onRun,
   onIgnore,
+  onDelete,
 }: {
   task: SelfHealingTask;
   isSelected: boolean;
   onSelect: (id: number) => void;
   onRun: (id: number) => Promise<void>;
   onIgnore: (id: number) => Promise<void>;
+  onDelete: (id: number) => Promise<void>;
 }) {
   const statusPalette =
     task.status === 'completed'
@@ -85,8 +88,9 @@ export function TaskCard({
 
   return (
     <Card
+      variant='interactive'
       borderColor={isSelected ? 'brand.500' : 'slate.800'}
-      bg={isSelected ? 'rgba(15, 23, 42, 0.92)' : 'slate.900'}
+      bg={isSelected ? 'rgba(15, 23, 42, 0.92)' : 'bgPanel'}
       cursor='pointer'
       onClick={() => onSelect(task.id)}
     >
@@ -150,11 +154,7 @@ export function TaskCard({
             event.stopPropagation();
             void onRun(task.id);
           }}
-          disabled={
-            task.status === 'running' ||
-            task.status === 'completed' ||
-            task.task_type === 'orphan_chunk'
-          }
+          disabled={task.can_run === false}
         >
           {summary.runButtonLabel}
         </Button>
@@ -170,6 +170,19 @@ export function TaskCard({
         >
           Ignore
         </Button>
+        {task.can_delete ? (
+          <Button
+            size='sm'
+            variant='danger'
+            onClick={(event) => {
+              event.stopPropagation();
+              void onDelete(task.id);
+            }}
+          >
+            <Trash2 size={14} />
+            Delete
+          </Button>
+        ) : null}
       </HStack>
     </Card>
   );

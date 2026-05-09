@@ -68,10 +68,244 @@ function claimText(claim: JsonValue): string {
   return String(claim);
 }
 
+function asString(value: JsonValue | undefined): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function asNumber(value: JsonValue | undefined): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function asArray(value: JsonValue | undefined): JsonValue[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function formatCount(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function ResultSection({ label, value }: { label: string; value: string }) {
+  return (
+    <Box>
+      <Text
+        fontSize='xs'
+        color='slate.500'
+        textTransform='uppercase'
+        letterSpacing='wider'
+        mb='1'
+      >
+        {label}
+      </Text>
+      <Text fontSize='sm' color='slate.200'>
+        {value}
+      </Text>
+    </Box>
+  );
+}
+
+function renderTaskResult(task: SelfHealingTask) {
+  if (!task.result || Object.keys(task.result).length === 0) {
+    return null;
+  }
+
+  switch (task.task_type) {
+    case 'missing_definition': {
+      const definition = asString(task.result.definition);
+      const confidence = asNumber(task.result.confidence);
+      const evidenceChunkIds = asArray(task.result.evidence_chunk_ids);
+
+      return (
+        <Stack gap='3'>
+          {definition ? (
+            <ResultSection label='Updated definition' value={definition} />
+          ) : null}
+          <Grid templateColumns='1fr 1fr' gap='3'>
+            {confidence !== null ? (
+              <MetaField
+                label='Confidence'
+                value={`${(confidence * 100).toFixed(0)}%`}
+              />
+            ) : null}
+            {evidenceChunkIds.length > 0 ? (
+              <MetaField
+                label='Evidence'
+                value={formatCount(evidenceChunkIds.length, 'chunk')}
+              />
+            ) : null}
+          </Grid>
+          {evidenceChunkIds.length > 0 ? (
+            <HStack gap='2' flexWrap='wrap'>
+              {evidenceChunkIds.map((chunkId, index) => (
+                <Badge
+                  key={`${chunkId}-${index}`}
+                  variant='subtle'
+                  colorPalette='cyan'
+                >
+                  Chunk {String(chunkId)}
+                </Badge>
+              ))}
+            </HStack>
+          ) : null}
+        </Stack>
+      );
+    }
+    case 'duplicate_entity': {
+      const canonicalId = asNumber(task.result.canonical_entity_id);
+      const mergedIds = asArray(task.result.merged_entity_ids);
+      const aliases = asArray(task.result.aliases)
+        .map((alias) => asString(alias))
+        .filter((alias): alias is string => Boolean(alias));
+
+      return (
+        <Stack gap='3'>
+          <Grid templateColumns='1fr 1fr' gap='3'>
+            {canonicalId !== null ? (
+              <MetaField label='Canonical entity' value={`#${canonicalId}`} />
+            ) : null}
+            <MetaField
+              label='Merged duplicates'
+              value={formatCount(mergedIds.length, 'entity')}
+            />
+          </Grid>
+          {mergedIds.length > 0 ? (
+            <ResultSection
+              label='Merged entity ids'
+              value={mergedIds.map((id) => `#${String(id)}`).join(', ')}
+            />
+          ) : null}
+          {aliases.length > 0 ? (
+            <Box>
+              <Text
+                fontSize='xs'
+                color='slate.500'
+                textTransform='uppercase'
+                letterSpacing='wider'
+                mb='2'
+              >
+                Canonical aliases
+              </Text>
+              <HStack gap='2' flexWrap='wrap'>
+                {aliases.map((alias) => (
+                  <Badge key={alias} variant='subtle' colorPalette='purple'>
+                    {alias}
+                  </Badge>
+                ))}
+              </HStack>
+            </Box>
+          ) : null}
+        </Stack>
+      );
+    }
+    case 'low_confidence_answer': {
+      const resultStatus = asString(task.result.status);
+      const suggestion = asString(task.result.suggestion);
+      const answer = asString(task.result.answer);
+      const memoryId = asNumber(task.result.memory_id);
+      const recommendedChunkIds = asArray(task.result.recommended_chunk_ids);
+      const relatedEntityIds = asArray(task.result.related_entity_ids);
+
+      return (
+        <Stack gap='3'>
+          {resultStatus ? (
+            <MetaField
+              label='Resolution'
+              value={resultStatus.split('_').join(' ')}
+            />
+          ) : null}
+          {recommendedChunkIds.length > 0 ? (
+            <ResultSection
+              label='Supporting evidence found'
+              value={`Found ${formatCount(recommendedChunkIds.length, 'recommended chunk')} to review.`}
+            />
+          ) : null}
+          {relatedEntityIds.length > 0 ? (
+            <ResultSection
+              label='Related entities'
+              value={`${formatCount(relatedEntityIds.length, 'related entity')} surfaced from the graph.`}
+            />
+          ) : null}
+          {suggestion ? (
+            <ResultSection label='Suggested next step' value={suggestion} />
+          ) : null}
+          {answer ? (
+            <ResultSection label='Previous answer' value={answer} />
+          ) : null}
+          {recommendedChunkIds.length > 0 ||
+          relatedEntityIds.length > 0 ||
+          memoryId !== null ? (
+            <Grid templateColumns='1fr 1fr' gap='3'>
+              {recommendedChunkIds.length > 0 ? (
+                <MetaField
+                  label='Recommended chunks'
+                  value={String(recommendedChunkIds.length)}
+                />
+              ) : null}
+              {relatedEntityIds.length > 0 ? (
+                <MetaField
+                  label='Related entities'
+                  value={String(relatedEntityIds.length)}
+                />
+              ) : null}
+              {memoryId !== null ? (
+                <MetaField label='Repair memory' value={`#${memoryId}`} />
+              ) : null}
+            </Grid>
+          ) : null}
+        </Stack>
+      );
+    }
+    case 'contradiction': {
+      const resultStatus = asString(task.result.status);
+      const message = asString(task.result.message);
+      const resultClaims = asArray(task.result.claims);
+
+      return (
+        <Stack gap='3'>
+          {resultStatus ? (
+            <MetaField
+              label='Review status'
+              value={resultStatus.split('_').join(' ')}
+            />
+          ) : null}
+          {message ? <ResultSection label='Outcome' value={message} /> : null}
+          {resultClaims.length > 0 ? (
+            <ResultSection
+              label='Claims surfaced'
+              value={formatCount(resultClaims.length, 'claim')}
+            />
+          ) : null}
+        </Stack>
+      );
+    }
+    default:
+      return (
+        <Box
+          as='pre'
+          fontSize='xs'
+          color='slate.400'
+          whiteSpace='pre-wrap'
+          fontFamily='mono'
+          bg='blackAlpha.400'
+          p='2'
+          borderRadius='md'
+          overflow='auto'
+          maxH='240px'
+        >
+          {JSON.stringify(task.result, null, 2)}
+        </Box>
+      );
+  }
+}
+
 export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
   if (!task) {
     return (
-      <Card>
+      <Card variant='panel' h='full' minH='0'>
         <Heading size='sm' color='white' mb='2'>
           Repair details
         </Heading>
@@ -111,12 +345,14 @@ export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
 
   return (
     <Card
+      variant='panel'
       p='0'
+      minH='0'
       overflow='hidden'
       borderLeftWidth='3px'
       style={{ borderLeftColor: cfg.accent }}
     >
-      <Stack gap='0'>
+      <Stack gap='0' h='full' minH='0' overflowY='auto'>
         {/* ── Header ── */}
         <Box px='4' pt='4' pb='3'>
           <Flex justify='space-between' align='flex-start' mb='2' gap='2'>
@@ -298,22 +534,7 @@ export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
                 </Text>
               )}
 
-              {hasResult && !task.error_message && (
-                <Box
-                  as='pre'
-                  fontSize='xs'
-                  color='slate.400'
-                  whiteSpace='pre-wrap'
-                  fontFamily='mono'
-                  bg='blackAlpha.400'
-                  p='2'
-                  borderRadius='md'
-                  overflow='auto'
-                  maxH='140px'
-                >
-                  {JSON.stringify(task.result, null, 2)}
-                </Box>
-              )}
+              {hasResult && !task.error_message && renderTaskResult(task)}
             </Box>
           </>
         )}
