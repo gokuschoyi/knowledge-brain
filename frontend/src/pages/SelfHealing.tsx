@@ -1,15 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Box,
-  Grid,
-  Heading,
-  Stack,
-  Text,
-  Portal,
-  Flex,
-} from '@chakra-ui/react';
-import { Filter, Play, RefreshCw, X } from 'lucide-react';
+import { Box, Grid, Stack, Text } from '@chakra-ui/react';
 
 import {
   deleteSelfHealingTask,
@@ -28,10 +19,11 @@ import { LoadingState } from '../components/common/LoadingState';
 import { EmptyState } from '../components/common/EmptyState';
 import { TaskList } from '../components/selfHealing/TaskList';
 import { RepairResultPanel } from '../components/selfHealing/RepairResultPanel';
+import { SelfHealingMetrics } from '../components/selfHealing/SelfHealingMetrics';
+import { TaskTypeFilterBar } from '../components/selfHealing/TaskTypeFilterBar';
+import { SelfHealingFab } from '../components/selfHealing/SelfHealingFab';
 import { Card } from '../components/common/Card';
-import { Button } from '../components/common/Button';
 import { useActiveBrain } from '../context/useActiveBrain';
-import { Tooltip } from '../components/ui/tooltip';
 import type { SelfHealingTask } from '../api/types';
 import type { Brain } from '../api/brains';
 
@@ -267,101 +259,17 @@ export function SelfHealingPage() {
     <Stack gap='6' h='full' minH='0' position='relative'>
       {tasks.length ? (
         <>
-          <Grid
-            px={6}
-            pt={6}
-            templateColumns={{ base: '1fr 1fr', xl: 'repeat(4, 1fr)' }}
-            gap='4'
-          >
-            <Card variant='metric' px={4} py={3}>
-              <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
-                Pending
-              </Text>
-              <Heading size='lg' color='orange.300'>
-                {summary.pending}
-              </Heading>
-            </Card>
-            <Card variant='metric' px={4} py={3}>
-              <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
-                Running
-              </Text>
-              <Heading size='lg' color='blue.300'>
-                {summary.running}
-              </Heading>
-            </Card>
-            <Card variant='metric' px={4} py={3}>
-              <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
-                Completed
-              </Text>
-              <Heading size='lg' color='green.300'>
-                {summary.completed}
-              </Heading>
-            </Card>
-            <Card variant='metric' px={4} py={3}>
-              <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
-                Failed
-              </Text>
-              <Heading size='lg' color='red.300'>
-                {summary.failed}
-              </Heading>
-            </Card>
-          </Grid>
+          <Box px={6} pt={6}>
+            <SelfHealingMetrics summary={summary} />
+          </Box>
 
-          {taskTypes.length > 0 && (
-            <Flex px={6} gap='2' wrap='wrap' align='center'>
-              <Flex align='center' gap='2' mr='2'>
-                <Filter size={14} color='#64748b' />
-                <Text
-                  fontSize='xs'
-                  fontWeight='bold'
-                  color='slate.500'
-                  textTransform='uppercase'
-                  letterSpacing='wider'
-                >
-                  Filter by type
-                </Text>
-              </Flex>
-
-              <Button
-                size='xs'
-                variant={activeTaskTypeFilter === null ? 'solid' : 'ghost'}
-                onClick={() => setActiveTaskTypeFilter(null)}
-                rounded='full'
-                px='3'
-              >
-                All
-              </Button>
-
-              {taskTypes.map((type) => (
-                <Button
-                  key={type}
-                  size='xs'
-                  variant={activeTaskTypeFilter === type ? 'solid' : 'ghost'}
-                  onClick={() => setActiveTaskTypeFilter(type)}
-                  rounded='full'
-                  px='3'
-                  textTransform='capitalize'
-                >
-                  {type.split('_').join(' ')}
-                </Button>
-              ))}
-
-              {activeTaskTypeFilter && (
-                <Tooltip content='Clear filter'>
-                  <Box
-                    as='button'
-                    onClick={() => setActiveTaskTypeFilter(null)}
-                    p='1'
-                    rounded='full'
-                    _hover={{ bg: 'whiteAlpha.100' }}
-                    color='slate.400'
-                  >
-                    <X size={14} />
-                  </Box>
-                </Tooltip>
-              )}
-            </Flex>
-          )}
+          <Box px={6}>
+            <TaskTypeFilterBar
+              taskTypes={taskTypes}
+              activeFilter={activeTaskTypeFilter}
+              onFilterChange={setActiveTaskTypeFilter}
+            />
+          </Box>
         </>
       ) : (
         <Box px={6} py={6}>
@@ -439,85 +347,12 @@ export function SelfHealingPage() {
         }}
       />
 
-      {/* Floating Action Button */}
-      <Portal>
-        <Box
-          position='fixed'
-          bottom='8'
-          right='8'
-          zIndex='1000'
-          display='flex'
-          flexDirection='column'
-          gap='3'
-        >
-          <Tooltip content='Configure auto repair' showArrow>
-            <Button
-              size='lg'
-              variant='floating'
-              height='14'
-              width='14'
-              onClick={() => setIsAutoRepairDialogOpen(true)}
-              bg={
-                activeBrain.auto_repair_enabled
-                  ? 'rgba(20, 184, 166, 0.2)'
-                  : 'bgPanelElevated'
-              }
-              color={activeBrain.auto_repair_enabled ? 'white' : 'fgMuted'}
-              border='1px solid'
-              borderColor={
-                activeBrain.auto_repair_enabled
-                  ? 'rgba(20, 184, 166, 0.34)'
-                  : 'glassBorder'
-              }
-              boxShadow='glass'
-              backdropFilter='blur(18px)'
-              _hover={{
-                bg: activeBrain.auto_repair_enabled
-                  ? 'rgba(20, 184, 166, 0.28)'
-                  : 'rgba(148, 163, 184, 0.12)',
-                borderColor: activeBrain.auto_repair_enabled
-                  ? 'rgba(45, 212, 191, 0.44)'
-                  : 'rgba(99, 102, 241, 0.28)',
-                transform: 'translateY(-2px) scale(1.02)',
-              }}
-              transition='all 0.2s'
-            >
-              <RefreshCw size={22} />
-            </Button>
-          </Tooltip>
-
-          <Tooltip content='Run all pending repair tasks' showArrow>
-            <Button
-              size='lg'
-              variant='floating'
-              height='14'
-              width='14'
-              onClick={() => setIsConfirmDialogOpen(true)}
-              bg='rgba(99, 102, 241, 0.22)'
-              color='white'
-              border='1px solid'
-              borderColor='borderStrong'
-              boxShadow='glass'
-              backdropFilter='blur(18px)'
-              disabled={!summary.pending}
-              _hover={{
-                bg: 'rgba(99, 102, 241, 0.3)',
-                borderColor: 'rgba(129, 140, 248, 0.5)',
-                transform: 'translateY(-2px) scale(1.02)',
-              }}
-              _disabled={{
-                bg: 'bgPanelElevated',
-                color: 'fgSubtle',
-                borderColor: 'glassBorder',
-                boxShadow: 'none',
-              }}
-              transition='all 0.2s'
-            >
-              <Play size={24} />
-            </Button>
-          </Tooltip>
-        </Box>
-      </Portal>
+      <SelfHealingFab
+        autoRepairEnabled={activeBrain.auto_repair_enabled}
+        pendingCount={summary.pending}
+        onOpenSettings={() => setIsAutoRepairDialogOpen(true)}
+        onRunAll={() => setIsConfirmDialogOpen(true)}
+      />
 
       <AutoRepairSettingsDialog
         isOpen={isAutoRepairDialogOpen}

@@ -1,17 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Flex, Heading, Stack, Text } from '@chakra-ui/react';
-import { History } from 'lucide-react';
+import { Box, Flex, Stack, Text } from '@chakra-ui/react';
 
 import { getBrains } from '../api/brains';
 import { listDocuments } from '../api/documents';
 import { ChatWindow } from '../components/chat/ChatWindow';
+import { ChatHistorySidebar } from '../components/chat/ChatHistorySidebar';
 import { SourcePanel } from '../components/chat/SourcePanel';
 import { KnowledgeGapPanel } from '../components/chat/KnowledgeGapPanel';
 import { LoadingState } from '../components/common/LoadingState';
 import { Card } from '../components/common/Card';
-import { Button } from '../components/common/Button';
-import { MetaChip } from '../components/common/MetaChip';
 import { useActiveBrain } from '../context/useActiveBrain';
 import {
   getChatSession,
@@ -270,99 +268,27 @@ export function ChatPage() {
       {/* Sidebar - History */}
       <Box w='80' pl={6} py={6} display={{ base: 'none', xl: 'block' }}>
         <Stack gap='6' h='full'>
-          <Box
-            flex='1'
-            p='4'
-            className='arctic-glass'
-            borderRadius='2xl'
-            overflow='hidden'
-          >
-            <Heading
-              size='xs'
-              color='slate.500'
-              textTransform='uppercase'
-              mb='4'
-              display='flex'
-              alignItems='center'
-              justifyContent='space-between'
-            >
-              <Flex align='center' gap='2'>
-                <History size={14} /> Recent Research
-              </Flex>
-              <Button
-                size='xs'
-                variant='outline'
-                disabled={scopedUiState.loading}
-                onClick={() => {
-                  setUiState({
-                    ...createChatUiState(activeBrainId),
-                    brainId: activeBrainId,
-                    isStartingNewChat: true,
-                  });
-                }}
-              >
-                New chat
-              </Button>
-            </Heading>
-            <Text fontSize='xs' color='fgMuted' mb='4'>
-              Showing saved chats for {activeBrain.name}.
-            </Text>
-            {sessionsQuery.isLoading ? (
-              <LoadingState label='Loading history...' />
-            ) : !sessionsQuery.data?.length ? (
-              <Flex
-                direction='column'
-                align='center'
-                justify='center'
-                h='40'
-                opacity={0.4}
-              >
-                <Text fontSize='xs' textAlign='center'>
-                  No saved conversations yet
-                </Text>
-              </Flex>
-            ) : (
-              <Stack gap='2'>
-                {sessionsQuery.data.map((session) => {
-                  const isActive = session.id === activeSessionId;
-                  return (
-                    <Button
-                      key={session.id}
-                      justifyContent='flex-start'
-                      variant='ghost'
-                      h='auto'
-                      py='2'
-                      px='3'
-                      bg={isActive ? 'rgba(99, 102, 241, 0.12)' : 'transparent'}
-                      borderWidth='1px'
-                      borderColor={isActive ? 'cyan.400' : 'transparent'}
-                      _hover={{ bg: 'rgba(255,255,255,0.06)' }}
-                      borderRadius='xl'
-                      onClick={() => {
-                        setUiState({
-                          ...createChatUiState(activeBrainId),
-                          brainId: activeBrainId,
-                          activeSessionId: session.id,
-                        });
-                      }}
-                    >
-                      <Stack gap='1' align='flex-start' textAlign={'start'}>
-                        <Text fontSize='sm' color='white' lineClamp={2}>
-                          {session.title || 'Untitled conversation'}
-                        </Text>
-                        <MetaChip
-                          label='last'
-                          value={new Date(
-                            session.last_message_at ?? session.created_at,
-                          ).toLocaleString()}
-                        />
-                      </Stack>
-                    </Button>
-                  );
-                })}
-              </Stack>
-            )}
-          </Box>
+          <ChatHistorySidebar
+            brainName={activeBrain.name}
+            sessions={sessionsQuery.data ?? []}
+            activeSessionId={activeSessionId}
+            isLoading={sessionsQuery.isLoading}
+            isDisabled={scopedUiState.loading}
+            onNewChat={() => {
+              setUiState({
+                ...createChatUiState(activeBrainId),
+                brainId: activeBrainId,
+                isStartingNewChat: true,
+              });
+            }}
+            onSelectSession={(id) => {
+              setUiState({
+                ...createChatUiState(activeBrainId),
+                brainId: activeBrainId,
+                activeSessionId: id,
+              });
+            }}
+          />
         </Stack>
       </Box>
 

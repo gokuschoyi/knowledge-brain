@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Grid,
   Heading,
-  HStack,
   SimpleGrid,
   Stack,
   Text,
@@ -13,8 +12,8 @@ import { getBrains } from '../api/brains';
 import { getDashboard } from '../api/dashboard';
 import { Card } from '../components/common/Card';
 import { LoadingState } from '../components/common/LoadingState';
-import { MetaChip } from '../components/common/MetaChip';
 import { MetricTile } from '../components/common/MetricTile';
+import { BrainHeroCard } from '../components/dashboard/BrainHeroCard';
 import { NeuralBarChart } from '../components/dashboard/NeuralBarChart';
 import { useActiveBrain } from '../context/useActiveBrain';
 
@@ -66,71 +65,7 @@ export function DashboardPage() {
   return (
     <Stack gap={6} p={6} h='full' minH='0' className='dashboard-page'>
       <Grid templateColumns={{ base: '1fr', xl: '1.4fr 0.85fr' }} gap={6}>
-        <Card variant='hero'>
-          <Stack gap='6'>
-            <Stack gap='3'>
-              <Text textStyle='sectionLabel' color='cyan.300'>
-                {data.hero.status}
-              </Text>
-              <Heading size='2xl' color='white' maxW='18ch'>
-                {data.hero.title}
-              </Heading>
-              <Text fontSize='sm' color='fgMuted' maxW='60ch'>
-                {data.hero.description}
-              </Text>
-            </Stack>
-            <HStack gap='2' wrap='wrap'>
-              <MetaChip
-                label='completed'
-                value={String(data.hero.documents_completed)}
-              />
-              <MetaChip
-                label='processing'
-                value={String(data.hero.documents_processing)}
-              />
-              <MetaChip
-                label='failed'
-                value={String(data.hero.documents_failed)}
-              />
-            </HStack>
-            {data.brain_summary ? (
-              <HStack gap='2' wrap='wrap'>
-                <MetaChip
-                  label='auto-repair'
-                  value={
-                    data.brain_summary.auto_repair_enabled ? 'enabled' : 'off'
-                  }
-                />
-                {data.brain_summary.auto_repair_enabled ? (
-                  <>
-                    <MetaChip
-                      label='mode'
-                      value={
-                        data.brain_summary.auto_repair_safe_only
-                          ? 'safe only'
-                          : 'all types'
-                      }
-                    />
-                    <MetaChip
-                      label='frequency'
-                      value={`${data.brain_summary.auto_repair_frequency_minutes}m`}
-                    />
-                    <MetaChip
-                      label='last run'
-                      value={
-                        data.brain_summary.last_auto_repair_at
-                          ? new Date(
-                              data.brain_summary.last_auto_repair_at,
-                            ).toLocaleString()
-                          : 'never'
-                      }
-                    />
-                  </>
-                ) : null}
-              </HStack>
-            ) : null}
-          </Stack>
-        </Card>
+        <BrainHeroCard hero={data.hero} brainSummary={data.brain_summary} />
 
         <Card variant='panel'>
           <Stack gap='4' h='full'>

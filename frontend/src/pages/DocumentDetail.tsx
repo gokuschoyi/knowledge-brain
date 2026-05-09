@@ -1,5 +1,4 @@
 import {
-  Badge,
   Box,
   Flex,
   Heading,
@@ -21,20 +20,14 @@ import {
   retryChunk,
   retryDocument,
 } from '../api/documents';
-import type { ChunkExtractionStatus } from '../api/types';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { MetaChip } from '../components/common/MetaChip';
 import { LoadingState } from '../components/common/LoadingState';
-
-const extractionStatusPalette: Record<ChunkExtractionStatus, string> = {
-  pending: 'gray',
-  queued: 'yellow',
-  running: 'blue',
-  completed: 'green',
-  failed: 'red',
-};
+import { ChunkCard } from '../components/documents/ChunkCard';
+import { EntityListItem } from '../components/documents/EntityListItem';
+import { RelationshipItem } from '../components/documents/RelationshipItem';
 
 export function DocumentDetailPage() {
   const { id = '' } = useParams();
@@ -174,75 +167,14 @@ export function DocumentDetailPage() {
             overflowY='auto'
             pr='1'
           >
-            {chunksQuery.data?.map((chunk) => {
-              const isEmpty =
-                chunk.extraction_status === 'completed' &&
-                chunk.entity_count === 0 &&
-                chunk.relationship_count === 0;
-              const canRetry = chunk.extraction_status === 'failed' || isEmpty;
-              return (
-                <Box
-                  key={chunk.id}
-                  borderRadius='md'
-                  borderWidth='1px'
-                  borderColor={
-                    chunk.extraction_status === 'failed'
-                      ? 'red.900'
-                      : isEmpty
-                        ? 'orange.900'
-                        : 'slate.800'
-                  }
-                  p='3'
-                  fontSize='sm'
-                  color='slate.300'
-                  _hover={{ bg: 'slate.900' }}
-                >
-                  <Flex justify='space-between' align='center' mb='2'>
-                    <Text fontSize='xs' color='slate.500'>
-                      #{chunk.chunk_index + 1}
-                    </Text>
-                    <Flex gap='2' align='center'>
-                      <Badge
-                        size='xs'
-                        colorPalette={
-                          extractionStatusPalette[chunk.extraction_status]
-                        }
-                        variant='subtle'
-                        textTransform='capitalize'
-                      >
-                        {chunk.extraction_status}
-                      </Badge>
-                      {canRetry && (
-                        <Button
-                          size='xs'
-                          variant='outline'
-                          colorPalette={
-                            chunk.extraction_status === 'failed'
-                              ? 'red'
-                              : 'orange'
-                          }
-                          loading={retryingChunks.has(chunk.id)}
-                          onClick={() => void handleRetryChunk(chunk.id)}
-                        >
-                          Retry
-                        </Button>
-                      )}
-                    </Flex>
-                  </Flex>
-                  <Text fontSize='sm' lineClamp={3}>
-                    {chunk.summary}
-                  </Text>
-                  <Flex gap='3' mt='2'>
-                    <Text fontSize='xs' color='slate.500'>
-                      {chunk.entity_count} entities
-                    </Text>
-                    <Text fontSize='xs' color='slate.500'>
-                      {chunk.relationship_count} relationships
-                    </Text>
-                  </Flex>
-                </Box>
-              );
-            })}
+            {chunksQuery.data?.map((chunk) => (
+              <ChunkCard
+                key={chunk.id}
+                chunk={chunk}
+                isRetrying={retryingChunks.has(chunk.id)}
+                onRetry={(chunkId) => void handleRetryChunk(chunkId)}
+              />
+            ))}
           </Stack>
         </Card>
 
@@ -259,18 +191,7 @@ export function DocumentDetailPage() {
             pr='1'
           >
             {entitiesQuery.data?.map((entity) => (
-              <Flex
-                key={entity.id}
-                p='2'
-                bg='slate.900/50'
-                borderRadius='md'
-                align='center'
-                fontSize='sm'
-                color='slate.300'
-              >
-                <Box w='2' h='2' borderRadius='full' bg='brand.400' mr='3' />
-                {entity.name}
-              </Flex>
+              <EntityListItem key={entity.id} entity={entity} />
             ))}
           </Stack>
         </Card>
@@ -288,26 +209,10 @@ export function DocumentDetailPage() {
             pr='1'
           >
             {relationshipsQuery.data?.map((relationship) => (
-              <Box
+              <RelationshipItem
                 key={relationship.id}
-                p='2'
-                bg='slate.900/50'
-                borderRadius='md'
-                fontSize='sm'
-                color='slate.300'
-              >
-                <HStack wrap='wrap'>
-                  <Text fontWeight='bold' color='white'>
-                    {relationship.source_name}
-                  </Text>
-                  <Badge size='sm' variant='outline' colorPalette='orange'>
-                    {relationship.relationship_type}
-                  </Badge>
-                  <Text fontWeight='bold' color='white'>
-                    {relationship.target_name}
-                  </Text>
-                </HStack>
-              </Box>
+                relationship={relationship}
+              />
             ))}
           </Stack>
         </Card>

@@ -1,63 +1,21 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Badge, Box, HStack, Stack, Text } from '@chakra-ui/react';
+import { Box, Stack, Text } from '@chakra-ui/react';
 
 import { getBrains } from '../api/brains';
 import type { GraphNode } from '../api/types';
 import { getGraph } from '../api/graph';
-import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { EmptyState } from '../components/common/EmptyState';
 // import { KnowledgeGraphView } from 'components/graph/KnowledgeGraphView';
 import { ElkKnowledgeGraphView } from '../components/graph/ElkKnowledgeGraphView';
 // import { GraphLegend } from '../components/graph/GraphLegend';
+import { GraphTabBar } from '../components/graph/GraphTabBar';
 import { IsolatedEntitiesPanel } from '../components/graph/IsolatedEntitiesPanel';
 import { LoadingState } from '../components/common/LoadingState';
 import { useActiveBrain } from '../context/useActiveBrain';
 
 type GraphTab = 'graph' | 'isolated';
-
-function TabButton({
-  active,
-  count,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  count: number;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <Button
-      variant='ghost'
-      onClick={onClick}
-      border='1px solid'
-      borderColor={active ? 'borderStrong' : 'glassBorder'}
-      color={active ? 'white' : 'fgMuted'}
-      bg={active ? 'rgba(99, 102, 241, 0.18)' : 'glassFill'}
-      borderRadius='xl'
-      backdropFilter='blur(8px)'
-      boxShadow={active ? 'active' : 'none'}
-      _hover={{
-        bg: active ? 'rgba(99, 102, 241, 0.24)' : 'rgba(148, 163, 184, 0.12)',
-        borderColor: active ? 'borderStrong' : 'rgba(99, 102, 241, 0.28)',
-      }}
-    >
-      <HStack gap='2'>
-        <Text>{label}</Text>
-        <Badge
-          bg={active ? 'rgba(255,255,255,0.16)' : 'rgba(15, 23, 42, 0.72)'}
-          color={active ? 'white' : 'fgMuted'}
-          borderRadius='full'
-          px='2'
-        >
-          {count}
-        </Badge>
-      </HStack>
-    </Button>
-  );
-}
 
 export function KnowledgeGraphPage() {
   const { activeBrainId } = useActiveBrain();
@@ -138,20 +96,12 @@ export function KnowledgeGraphPage() {
                   graph stays readable.
                 </Text>
               </Box>
-              <HStack gap='3' wrap='wrap'>
-                <TabButton
-                  active={tab === 'graph'}
-                  label='Graph'
-                  count={partitioned.connectedGraph.nodes.length}
-                  onClick={() => setTab('graph')}
-                />
-                <TabButton
-                  active={tab === 'isolated'}
-                  label='Isolated Entities'
-                  count={partitioned.isolatedEntities.length}
-                  onClick={() => setTab('isolated')}
-                />
-              </HStack>
+              <GraphTabBar
+                tab={tab}
+                connectedCount={partitioned.connectedGraph.nodes.length}
+                isolatedCount={partitioned.isolatedEntities.length}
+                onTabChange={setTab}
+              />
             </Stack>
           </Card>
 

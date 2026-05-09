@@ -67,7 +67,7 @@ export function DocumentsPage() {
       : null;
 
   return (
-    <VStack gap={6} align='stretch' h='full' minH='0' overflow='hidden' px={6}>
+    <VStack gap={6} align='stretch' h='full' minH='0' overflow='hidden' pl={6}>
       <Flex flex='1' minH='0' overflow='hidden'>
         <DocumentList
           documents={data}
