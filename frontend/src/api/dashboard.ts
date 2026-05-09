@@ -7,6 +7,32 @@ export type DashboardMetrics = {
   relationships: number;
   open_self_healing_tasks: number;
   average_quality_score: number;
+  quality_score_percent: number;
+  hero: {
+    status: string;
+    title: string;
+    description: string;
+    documents_completed: number;
+    documents_failed: number;
+    documents_processing: number;
+  };
+  brain_summary: {
+    id: string;
+    name: string;
+    description: string;
+    created_at: string;
+    updated_at: string;
+    auto_repair_enabled: boolean;
+    auto_repair_safe_only: boolean;
+    auto_repair_allowed_types: string[];
+    auto_repair_frequency_minutes: number;
+    last_auto_repair_at: string | null;
+  } | null;
+  analytics: Array<{
+    label: string;
+    value: number;
+    tone?: 'indigo' | 'cyan' | 'warning';
+  }>;
 };
 
 export function getDashboard(brainId?: string) {

@@ -24,6 +24,12 @@ export function ignoreSelfHealingTask(id: number) {
   });
 }
 
+export function deleteSelfHealingTask(id: number) {
+  return apiFetch<void>(`/self-healing/tasks/${id}/`, {
+    method: 'DELETE',
+  });
+}
+
 export function runAllSelfHealingTasks(brainId?: string | null) {
   return apiFetch<SelfHealingRunAllResponse>('/self-healing/run/', {
     method: 'POST',

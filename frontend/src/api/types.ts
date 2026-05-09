@@ -12,16 +12,21 @@ export type DocumentSummary = {
   id: number;
   title: string;
   source_type: DocumentSourceType;
+  source_label?: string;
   tags: string[];
   llm_provider: string;
   llm_model: string;
   status: DocumentStatus;
+  status_label?: string;
   summary: string;
   quality_score: number;
   error_message: string;
   created_at: string;
   updated_at: string;
+  latest_activity_at?: string;
   chunks_count: number;
+  brain_name?: string;
+  latest_job_status?: string | null;
 };
 
 export type IngestionLogEntry = {
@@ -155,6 +160,7 @@ export type ChatSource = {
   document_title: string;
   chunk_id: number;
   snippet: string;
+  score?: number;
 };
 
 export type ChatRelatedEntity = {
@@ -183,6 +189,7 @@ export type ChatMessage = {
   content: string;
   confidence_score: number | null;
   sources: JsonValue[];
+  source_count?: number;
   metadata: { [key: string]: JsonValue };
   created_at: string;
 };
@@ -191,6 +198,9 @@ export type ChatSession = {
   id: number;
   title: string;
   created_at: string;
+  last_message_at?: string;
+  message_count?: number;
+  brain_name?: string;
   messages: ChatMessage[];
 };
 
@@ -236,8 +246,10 @@ export type SelfHealingTask = {
   id: number;
   brain: string | null;
   task_type: string;
+  task_type_label?: string;
   status: SelfHealingTaskStatus;
   priority: number;
+  priority_label?: string;
   title: string;
   description: string;
   related_document: number | null;
@@ -252,6 +264,8 @@ export type SelfHealingTask = {
   related_entity_name?: string;
   related_document_title?: string;
   brain_name?: string;
+  can_run?: boolean;
+  can_delete?: boolean;
 };
 
 export type SelfHealingRunResponse = {
