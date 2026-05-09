@@ -30,20 +30,25 @@ function TabButton({
 }) {
   return (
     <Button
-      variant={active ? 'solid' : 'outline'}
+      variant='ghost'
       onClick={onClick}
-      borderColor={active ? undefined : 'slate.700'}
-      color={active ? undefined : 'slate.200'}
-      bg={active ? 'brand.500' : 'slate.900'}
+      border='1px solid'
+      borderColor={active ? 'borderStrong' : 'glassBorder'}
+      color={active ? 'white' : 'fgMuted'}
+      bg={active ? 'rgba(99, 102, 241, 0.18)' : 'glassFill'}
+      borderRadius='xl'
+      backdropFilter='blur(8px)'
+      boxShadow={active ? 'active' : 'none'}
       _hover={{
-        bg: active ? 'brand.400' : 'slate.800',
+        bg: active ? 'rgba(99, 102, 241, 0.24)' : 'rgba(148, 163, 184, 0.12)',
+        borderColor: active ? 'borderStrong' : 'rgba(99, 102, 241, 0.28)',
       }}
     >
       <HStack gap='2'>
         <Text>{label}</Text>
         <Badge
-          bg={active ? 'rgba(255,255,255,0.18)' : 'slate.800'}
-          color={active ? 'white' : 'slate.300'}
+          bg={active ? 'rgba(255,255,255,0.16)' : 'rgba(15, 23, 42, 0.72)'}
+          color={active ? 'white' : 'fgMuted'}
           borderRadius='full'
           px='2'
         >
@@ -80,6 +85,9 @@ export function KnowledgeGraphPage() {
           },
     [data],
   );
+  const hasAnyGraphData =
+    partitioned.connectedGraph.nodes.length > 0 ||
+    partitioned.isolatedEntities.length > 0;
 
   if (brainsQuery.isLoading) {
     return <LoadingState label='Loading brains...' />;
@@ -104,9 +112,16 @@ export function KnowledgeGraphPage() {
     <Stack gap='6' h='full' p={6}>
       {isLoading || !data ? (
         <LoadingState label='Loading graph...' />
+      ) : !hasAnyGraphData ? (
+        <Box>
+          <EmptyState
+            title='No graph data for this brain'
+            body='Ingest more material into this brain to extract entities and relationships for the knowledge graph.'
+          />
+        </Box>
       ) : (
         <>
-          <Card py={3}>
+          <Card variant='panel' py={3}>
             <Stack
               direction={{ base: 'column', md: 'row' }}
               gap='4'

@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Box, Flex, Heading, Button, Stack, Text } from '@chakra-ui/react';
+import { Box, Flex, Heading, Stack, Text } from '@chakra-ui/react';
 import { History } from 'lucide-react';
 
 import { getBrains } from '../api/brains';
+import { listDocuments } from '../api/documents';
 import { ChatWindow } from '../components/chat/ChatWindow';
 import { SourcePanel } from '../components/chat/SourcePanel';
 import { KnowledgeGapPanel } from '../components/chat/KnowledgeGapPanel';
 import { LoadingState } from '../components/common/LoadingState';
 import { Card } from '../components/common/Card';
+import { Button } from '../components/common/Button';
+import { MetaChip } from '../components/common/MetaChip';
 import { useActiveBrain } from '../context/useActiveBrain';
 import {
   getChatSession,
@@ -102,6 +105,11 @@ export function ChatPage() {
       : createChatUiState(activeBrainId);
 
   const brainsQuery = useQuery({ queryKey: ['brains'], queryFn: getBrains });
+  const documentsQuery = useQuery({
+    queryKey: ['documents', activeBrainId],
+    queryFn: () => listDocuments(activeBrainId || undefined),
+    enabled: !!activeBrainId,
+  });
   const sessionsQuery = useQuery({
     queryKey: ['chat-sessions', activeBrainId],
     queryFn: () => getChatSessions(activeBrainId),
@@ -265,10 +273,8 @@ export function ChatPage() {
           <Box
             flex='1'
             p='4'
-            bg='slate.900'
-            borderRadius='xl'
-            borderWidth='1px'
-            borderColor='slate.800'
+            className='arctic-glass'
+            borderRadius='2xl'
             overflow='hidden'
           >
             <Heading
@@ -286,10 +292,6 @@ export function ChatPage() {
               <Button
                 size='xs'
                 variant='outline'
-                borderColor='slate.700'
-                color='slate.200'
-                bg='slate.950'
-                _hover={{ bg: 'slate.800' }}
                 disabled={scopedUiState.loading}
                 onClick={() => {
                   setUiState({
@@ -302,7 +304,7 @@ export function ChatPage() {
                 New chat
               </Button>
             </Heading>
-            <Text fontSize='xs' color='slate.500' mb='4'>
+            <Text fontSize='xs' color='fgMuted' mb='4'>
               Showing saved chats for {activeBrain.name}.
             </Text>
             {sessionsQuery.isLoading ? (
@@ -331,10 +333,11 @@ export function ChatPage() {
                       h='auto'
                       py='2'
                       px='3'
-                      bg={isActive ? 'slate.800' : 'transparent'}
+                      bg={isActive ? 'rgba(99, 102, 241, 0.12)' : 'transparent'}
                       borderWidth='1px'
-                      borderColor={isActive ? 'slate.700' : 'transparent'}
-                      _hover={{ bg: 'slate.800' }}
+                      borderColor={isActive ? 'cyan.400' : 'transparent'}
+                      _hover={{ bg: 'rgba(255,255,255,0.06)' }}
+                      borderRadius='xl'
                       onClick={() => {
                         setUiState({
                           ...createChatUiState(activeBrainId),
@@ -347,9 +350,12 @@ export function ChatPage() {
                         <Text fontSize='sm' color='white' lineClamp={2}>
                           {session.title || 'Untitled conversation'}
                         </Text>
-                        <Text fontSize='xs' color='slate.500'>
-                          {new Date(session.created_at).toLocaleString()}
-                        </Text>
+                        <MetaChip
+                          label='last'
+                          value={new Date(
+                            session.last_message_at ?? session.created_at,
+                          ).toLocaleString()}
+                        />
                       </Stack>
                     </Button>
                   );
@@ -361,9 +367,15 @@ export function ChatPage() {
       </Box>
 
       {/* Main Chat Area */}
-      <Box flex='1' h='full' py={6}>
+      <Box
+        flex='1'
+        h='full'
+        py={6}
+        pr={analysisGaps.length > 0 || analysisSources.length > 0 ? 0 : 6}
+      >
         <ChatWindow
           messages={activeMessages}
+          hasDocuments={(documentsQuery.data?.length ?? 0) > 0}
           pendingQuestion={scopedUiState.pendingQuestion}
           streamingAnswer={scopedUiState.streamingAnswer}
           selectedAssistantMessageId={selectedAssistantMessage?.id ?? null}
@@ -385,7 +397,7 @@ export function ChatPage() {
       {/* Analysis Panel */}
       {(analysisGaps.length > 0 || analysisSources.length > 0) && (
         <Box w='80' pr={6} py={6} display={{ base: 'none', '2xl': 'block' }}>
-          <Stack gap='6' h='full' overflowY='auto' px={2}>
+          <Stack gap='6' h='full' overflowY='auto'>
             <KnowledgeGapPanel gaps={analysisGaps} />
             {analysisSources.length ? (
               <SourcePanel sources={analysisSources} />
