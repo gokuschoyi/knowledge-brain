@@ -556,10 +556,11 @@ export function ElkKnowledgeGraphView({ graph }: { graph: GraphResponse }) {
           )}
 
           {!isLayouting && reactFlowInstance ? (
-            <Stack position='absolute' right='4' bottom='4' zIndex='5' gap='2'>
+            <Stack position='absolute' left='4' bottom='4' zIndex='5' gap='2'>
               <IconButton
                 aria-label='Zoom in'
                 className='arctic-glass'
+                color={'white'}
                 onClick={() => reactFlowInstance.zoomIn({ duration: 180 })}
               >
                 <ZoomIn size={15} />
@@ -567,6 +568,7 @@ export function ElkKnowledgeGraphView({ graph }: { graph: GraphResponse }) {
               <IconButton
                 aria-label='Zoom out'
                 className='arctic-glass'
+                color={'white'}
                 onClick={() => reactFlowInstance.zoomOut({ duration: 180 })}
               >
                 <ZoomOut size={15} />
@@ -574,6 +576,7 @@ export function ElkKnowledgeGraphView({ graph }: { graph: GraphResponse }) {
               <IconButton
                 aria-label='Fit graph'
                 className='arctic-glass'
+                color={'white'}
                 onClick={() =>
                   reactFlowInstance.fitView({ duration: 220, padding: 0.16 })
                 }
