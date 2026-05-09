@@ -30,7 +30,20 @@ export const Tooltip = React.forwardRef<HTMLDivElement, TooltipProps>(
         <ChakraTooltip.Trigger asChild>{children}</ChakraTooltip.Trigger>
         <Portal disabled={!portalled} container={portalRef}>
           <ChakraTooltip.Positioner>
-            <ChakraTooltip.Content ref={ref} {...contentProps}>
+            <ChakraTooltip.Content
+              ref={ref}
+              bg='rgba(8, 17, 33, 0.92)'
+              color='fg'
+              border='1px solid'
+              borderColor='glassBorder'
+              borderRadius='lg'
+              boxShadow='glass'
+              backdropFilter='blur(18px)'
+              px='3'
+              py='2'
+              maxW='280px'
+              {...contentProps}
+            >
               {showArrow && (
                 <ChakraTooltip.Arrow>
                   <ChakraTooltip.ArrowTip />
