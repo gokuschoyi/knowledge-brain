@@ -4,7 +4,6 @@ import {
   Flex,
   Heading,
   HStack,
-  Separator,
   SimpleGrid,
   Stack,
   Text,
@@ -25,7 +24,8 @@ import {
 import type { ChunkExtractionStatus } from '../api/types';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
-import { ConfirmDocumentDeleteDialog } from '../components/documents/ConfirmDocumentDeleteDialog';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
+import { MetaChip } from '../components/common/MetaChip';
 import { LoadingState } from '../components/common/LoadingState';
 
 const extractionStatusPalette: Record<ChunkExtractionStatus, string> = {
@@ -101,28 +101,19 @@ export function DocumentDetailPage() {
 
   return (
     <Stack gap='6' align='stretch' h='full' minH='0' p={6}>
-      <Card>
+      <Card variant='hero'>
         <Flex align='flex-start' justify='space-between' gap='4'>
           <Box>
             <Heading size='lg' color='white'>
               {doc.title}
             </Heading>
-            <HStack mt='2' gap='3' color='slate.500' fontSize='sm'>
-              <Text>{doc.llm_provider}</Text>
-              <Separator orientation='vertical' h='3' borderColor='slate.700' />
-              <Text>{doc.llm_model}</Text>
-              <Badge
-                size='sm'
-                colorPalette={
-                  doc.status === 'completed'
-                    ? 'green'
-                    : doc.status === 'failed'
-                      ? 'red'
-                      : 'blue'
-                }
-              >
-                {doc.status}
-              </Badge>
+            <HStack mt='3' gap='2' wrap='wrap'>
+              <MetaChip
+                label='provider'
+                value={doc.llm_provider || 'unknown'}
+              />
+              <MetaChip label='model' value={doc.llm_model || 'unknown'} />
+              <MetaChip label='status' value={doc.status} />
             </HStack>
           </Box>
           <HStack gap='2'>
@@ -171,7 +162,7 @@ export function DocumentDetailPage() {
       </Card>
 
       <SimpleGrid columns={{ base: 1, xl: 3 }} gap='6' flex='1' minH='0'>
-        <Card display='flex' flexDirection='column' minH='0'>
+        <Card variant='panel' display='flex' flexDirection='column' minH='0'>
           <Heading size='sm' color='white' mb='4'>
             Chunks, {chunksQuery.data?.length ?? 0}
           </Heading>
@@ -255,7 +246,7 @@ export function DocumentDetailPage() {
           </Stack>
         </Card>
 
-        <Card display='flex' flexDirection='column' minH='0'>
+        <Card variant='panel' display='flex' flexDirection='column' minH='0'>
           <Heading size='sm' color='white' mb='4'>
             Entities, {entitiesQuery.data?.length ?? 0}
           </Heading>
@@ -284,7 +275,7 @@ export function DocumentDetailPage() {
           </Stack>
         </Card>
 
-        <Card display='flex' flexDirection='column' minH='0'>
+        <Card variant='panel' display='flex' flexDirection='column' minH='0'>
           <Heading size='sm' color='white' mb='4'>
             Relationships, {relationshipsQuery.data?.length ?? 0}
           </Heading>
@@ -322,8 +313,15 @@ export function DocumentDetailPage() {
         </Card>
       </SimpleGrid>
 
-      <ConfirmDocumentDeleteDialog
-        documentTitle={doc.title}
+      <ConfirmDialog
+        title='Delete Document'
+        description={
+          <>
+            Are you sure you want to delete <strong>{doc.title}</strong>? This
+            action cannot be undone.
+          </>
+        }
+        confirmLabel='Delete document'
         isOpen={isDeleteDialogOpen}
         isDeleting={deleteMutation.isPending}
         onOpenChange={setIsDeleteDialogOpen}

@@ -24,6 +24,7 @@ export function IngestPage() {
   const [jobId, setJobId] = useState<number | null>(null);
   const [job, setJob] = useState<IngestionJob | null>(null);
   const [retryVersion, setRetryVersion] = useState(0);
+  const [isFormManuallyCollapsed, setIsFormManuallyCollapsed] = useState(false);
   const documentsQuery = useQuery({
     queryKey: ['documents', activeBrainId],
     queryFn: () => listDocuments(activeBrainId || undefined),
@@ -62,6 +63,17 @@ export function IngestPage() {
     setRetryVersion((v) => v + 1);
   };
 
+  const ingestionActive =
+    ingestMutation.isPending ||
+    job?.status === 'pending' ||
+    job?.status === 'processing' ||
+    (documentsQuery.data?.some(
+      (document) =>
+        document.status === 'pending' || document.status === 'processing',
+    ) ??
+      false);
+  const isFormCollapsed = ingestionActive || isFormManuallyCollapsed;
+
   if (
     documentsQuery.isLoading ||
     modelCatalogQuery.isLoading ||
@@ -94,30 +106,23 @@ export function IngestPage() {
     );
   }
 
-  const ingestionActive =
-    ingestMutation.isPending ||
-    job?.status === 'pending' ||
-    job?.status === 'processing' ||
-    documentsQuery.data.some(
-      (document) =>
-        document.status === 'pending' || document.status === 'processing',
-    );
-
   return (
     <Grid
       templateColumns={{ base: '1fr', xl: '0.95fr 1.05fr' }}
       gap={6}
       h='full'
       minH='0'
+      className='ingestion-page'
     >
       <VStack gap={6} align='stretch' minH='0' py={6} pl={6}>
         <Box
           flex='1'
-          overflowY={'auto'}
+          minH='0'
+          overflowY='auto'
+          overflowX='hidden'
           display='flex'
           flexDirection='column'
           gap={6}
-          pr={2}
         >
           <IngestForm
             onSubmit={async (payload) => {
@@ -126,10 +131,17 @@ export function IngestPage() {
             loading={ingestMutation.isPending}
             ingestionActive={ingestionActive}
             activeBrainId={activeBrain.id}
-            activeBrainName={activeBrain.name}
+            collapsed={isFormCollapsed}
+            onToggleCollapse={() =>
+              setIsFormManuallyCollapsed((current) => !current)
+            }
             modelCatalog={modelCatalogQuery.data}
           />
-          <IngestionProgress job={job} onRetryChunk={handleRetryChunk} />
+          <IngestionProgress
+            job={job}
+            onRetryChunk={handleRetryChunk}
+            fillAvailableSpace={isFormCollapsed}
+          />
         </Box>
       </VStack>
       <DocumentList documents={documentsQuery.data} />
