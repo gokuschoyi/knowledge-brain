@@ -1,5 +1,5 @@
 from django.conf import settings
-from django.db.models import Avg, Count, Q
+from django.db.models import Avg, Q
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -12,11 +12,6 @@ from apps.agents.llm import get_available_embedding_catalog, get_default_embeddi
 from apps.documents.models import Chunk, Document
 from apps.knowledge.models import Entity, Relationship
 from apps.self_healing.models import SelfHealingTask
-
-
-from rest_framework import generics
-from .models import Brain
-from .serializers import BrainSerializer
 
 from rest_framework import generics
 from .models import Brain
@@ -47,6 +42,42 @@ class DashboardView(APIView):
             tasks = tasks.filter(brain_id=brain_id)
 
         average_quality = documents.aggregate(avg=Avg("quality_score")).get("avg") or 0
+        completed_documents = documents.filter(status=Document.STATUS_COMPLETED)
+        failed_documents = documents.filter(status=Document.STATUS_FAILED)
+        processing_documents = documents.filter(
+            Q(status=Document.STATUS_PENDING) | Q(status=Document.STATUS_PROCESSING)
+        )
+        linked_entity_ids = set(
+            relationships.values_list("source_entity_id", flat=True)
+        ) | set(
+            relationships.values_list("target_entity_id", flat=True)
+        )
+        entity_link_percent = float(
+            len(linked_entity_ids) / max(entities.count(), 1) * 100
+        )
+
+        chart_source = {
+            "Extraction": float(
+                chunks.exclude(summary="").count() / max(chunks.count(), 1) * 100
+            ),
+            "Entity Link": entity_link_percent,
+            "Quality": float(average_quality * 100),
+            "Repair Readiness": float(
+                max(
+                    0,
+                    100
+                    - (
+                        tasks.filter(
+                            Q(status=SelfHealingTask.STATUS_PENDING)
+                            | Q(status=SelfHealingTask.STATUS_RUNNING)
+                        ).count()
+                        * 12
+                    ),
+                )
+            ),
+        }
+
+        selected_brain = Brain.objects.filter(id=brain_id).first() if brain_id else None
         payload = {
             "documents": documents.count(),
             "chunks": chunks.count(),
@@ -56,6 +87,45 @@ class DashboardView(APIView):
                 Q(status=SelfHealingTask.STATUS_PENDING) | Q(status=SelfHealingTask.STATUS_RUNNING)
             ).count(),
             "average_quality_score": round(average_quality, 2),
+            "quality_score_percent": round(average_quality * 100, 1),
+            "hero": {
+                "status": "Focused intelligence" if selected_brain else "Workspace wide",
+                "title": selected_brain.name if selected_brain else "Knowledge Brain Fleet",
+                "description": selected_brain.description
+                if selected_brain and selected_brain.description
+                else (
+                    "Monitoring the active brain across ingestion, retrieval, graph structure, and repair."
+                    if selected_brain
+                    else "Monitoring all brains across ingestion, retrieval, graph structure, and repair."
+                ),
+                "documents_completed": completed_documents.count(),
+                "documents_failed": failed_documents.count(),
+                "documents_processing": processing_documents.count(),
+            },
+            "brain_summary": (
+                {
+                    "id": str(selected_brain.id),
+                    "name": selected_brain.name,
+                    "description": selected_brain.description or "",
+                    "created_at": selected_brain.created_at,
+                    "updated_at": selected_brain.updated_at,
+                    "auto_repair_enabled": selected_brain.auto_repair_enabled,
+                    "auto_repair_safe_only": selected_brain.auto_repair_safe_only,
+                    "auto_repair_allowed_types": selected_brain.auto_repair_allowed_types,
+                    "auto_repair_frequency_minutes": selected_brain.auto_repair_frequency_minutes,
+                    "last_auto_repair_at": selected_brain.last_auto_repair_at,
+                }
+                if selected_brain
+                else None
+            ),
+            "analytics": [
+                {
+                    "label": label,
+                    "value": round(value, 1),
+                    "tone": "warning" if label == "Repair Readiness" else "cyan" if label == "Quality" else "indigo",
+                }
+                for label, value in chart_source.items()
+            ],
         }
         return Response(payload)
 

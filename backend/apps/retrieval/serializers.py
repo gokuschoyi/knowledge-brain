@@ -26,14 +26,37 @@ class ChatQuerySerializer(serializers.Serializer):
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):
+    source_count = serializers.SerializerMethodField()
+
     class Meta:
         model = ChatMessage
         fields = "__all__"
 
+    def get_source_count(self, obj):
+        return len(obj.sources or [])
+
 
 class ChatSessionSerializer(serializers.ModelSerializer):
     messages = ChatMessageSerializer(many=True, read_only=True)
+    message_count = serializers.SerializerMethodField()
+    last_message_at = serializers.SerializerMethodField()
+    brain_name = serializers.CharField(source="brain.name", read_only=True)
 
     class Meta:
         model = ChatSession
-        fields = ["id", "title", "created_at", "messages"]
+        fields = [
+            "id",
+            "title",
+            "created_at",
+            "messages",
+            "message_count",
+            "last_message_at",
+            "brain_name",
+        ]
+
+    def get_message_count(self, obj):
+        return obj.messages.count()
+
+    def get_last_message_at(self, obj):
+        last_message = obj.messages.order_by("-created_at").first()
+        return last_message.created_at if last_message else obj.created_at
