@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import ReactFlow, {
   Background,
-  Controls,
   MarkerType,
   Position,
   type ReactFlowInstance,
@@ -19,8 +18,9 @@ import {
   Spinner,
   Stack,
   Text,
+  IconButton,
 } from '@chakra-ui/react';
-import { Search, X } from 'lucide-react';
+import { Search, X, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
 
 import type { GraphResponse } from '../../api/types';
 import { Card } from '../common/Card';
@@ -392,7 +392,13 @@ export function ElkKnowledgeGraphView({ graph }: { graph: GraphResponse }) {
       flex='1'
       minH='0'
     >
-      <Card p='0' overflow='hidden' display='flex' flexDirection='column'>
+      <Card
+        variant='panel'
+        p='0'
+        overflow='hidden'
+        display='flex'
+        flexDirection='column'
+      >
         <Box flex='1' minH='600px' position='relative' bg='slate.950'>
           <Box
             ref={searchOverlayRef}
@@ -546,9 +552,36 @@ export function ElkKnowledgeGraphView({ graph }: { graph: GraphResponse }) {
               maxZoom={1}
             >
               <Background color='#334155' gap={20} />
-              <Controls />
             </ReactFlow>
           )}
+
+          {!isLayouting && reactFlowInstance ? (
+            <Stack position='absolute' right='4' bottom='4' zIndex='5' gap='2'>
+              <IconButton
+                aria-label='Zoom in'
+                className='arctic-glass'
+                onClick={() => reactFlowInstance.zoomIn({ duration: 180 })}
+              >
+                <ZoomIn size={15} />
+              </IconButton>
+              <IconButton
+                aria-label='Zoom out'
+                className='arctic-glass'
+                onClick={() => reactFlowInstance.zoomOut({ duration: 180 })}
+              >
+                <ZoomOut size={15} />
+              </IconButton>
+              <IconButton
+                aria-label='Fit graph'
+                className='arctic-glass'
+                onClick={() =>
+                  reactFlowInstance.fitView({ duration: 220, padding: 0.16 })
+                }
+              >
+                <RefreshCw size={15} />
+              </IconButton>
+            </Stack>
+          ) : null}
         </Box>
       </Card>
 

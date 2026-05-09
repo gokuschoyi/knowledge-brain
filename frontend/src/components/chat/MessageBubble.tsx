@@ -36,25 +36,33 @@ export const MessageBubble = memo(
           minW='0'
           borderRadius='2xl'
           px={4}
-          py={2.5}
+          py={3}
           fontSize='sm'
           shadow='sm'
-          bg={role === 'user' ? 'brand.600' : 'slate.800'}
+          bg={
+            role === 'user'
+              ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.88), rgba(79, 70, 229, 0.7))'
+              : 'rgba(8, 17, 33, 0.9)'
+          }
           color={role === 'user' ? 'white' : 'slate.100'}
           border='1px'
           borderColor={
-            role === 'user' ? 'brand.500' : active ? 'brand.500' : 'slate.700'
+            role === 'user' ? 'signal.500' : active ? 'cyan.400' : 'glassBorder'
           }
           borderTopLeftRadius={role === 'assistant' ? '0' : '2xl'}
           borderTopRightRadius={role === 'user' ? '0' : '2xl'}
-          boxShadow={active ? '0 0 0 1px rgba(14, 165, 233, 0.55)' : 'sm'}
+          boxShadow={
+            active
+              ? '0 0 0 1px rgba(34, 211, 238, 0.55), 0 18px 34px rgba(34, 211, 238, 0.14)'
+              : '0 18px 34px rgba(3, 7, 18, 0.22)'
+          }
           cursor={isClickable ? 'pointer' : 'default'}
           transition='border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease'
           _hover={
             isClickable
               ? {
-                  borderColor: 'brand.500',
-                  boxShadow: '0 0 0 1px rgba(14, 165, 233, 0.45)',
+                  borderColor: 'cyan.400',
+                  boxShadow: '0 0 0 1px rgba(34, 211, 238, 0.45)',
                 }
               : undefined
           }
