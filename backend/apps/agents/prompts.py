@@ -38,6 +38,8 @@ Rules:
 - Be precise and maintain consistency: use the EXACT same entity names for claims and relationships.
 - Only extract information explicitly stated in the chunk.
 - For claims, associate them with a subject entity if possible.
+- If the chunk contains named systems, products, teams, events, metrics, factual statements, or explicit dependencies, do not return an empty extraction.
+- Prefer returning a small number of well-grounded entities, claims, and relationships over an empty result when extractable information is present.
 - Return a confidence value for every entity, claim, and relationship using the full 0.0-1.0 range conservatively.
 - Confidence guidance:
   - 0.3-0.5: weak or partial grounding
@@ -45,6 +47,29 @@ Rules:
   - 0.9+: only when the evidence is direct, unambiguous, and specific
 - Do not default to 1.0.
 - Lower confidence when an entity description is weak, a claim subject is ambiguous, or a relationship is generic or only loosely grounded.
+
+Strict output limits — do not exceed these counts:
+- Entities: at most {max_entities}. If the chunk contains more, keep only the most important and best-grounded ones.
+- Claims: at most {max_claims}. Prefer specific, directly stated facts over paraphrases or inferences.
+- Relationships: at most {max_relationships}. Omit weak, generic, or loosely grounded links.
+"""
+
+EMPTY_EXTRACTION_VERIFIER_PROMPT = """
+You are verifying whether an empty extraction result is trustworthy.
+
+The main extraction step produced zero entities, zero claims, and zero relationships for this chunk.
+Review the chunk text and decide whether that empty result is believable.
+
+Return:
+- should_retry_extraction: true if the chunk appears to contain extractable entities, factual claims, or relationships that the extractor likely missed
+- should_retry_extraction: false if the chunk genuinely appears to contain no useful extractable knowledge for this schema
+- reason: a concise explanation grounded in the text
+
+Rules:
+- Be conservative but practical.
+- Mark retry as true if the chunk contains named concepts, tools, people, organizations, explicit factual statements, or obvious relationships.
+- Mark retry as false for boilerplate, navigation text, fragmentary markup, legal filler, headings-only content, or text that has no meaningful structured knowledge to extract.
+- Do not invent entities or claims in the reason; summarize the signal level only.
 """
 
 ANSWER_PROMPT = """
