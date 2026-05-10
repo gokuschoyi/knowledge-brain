@@ -126,7 +126,7 @@ Retrieval Agent (LangGraph)
 
 **Fixed Gemini embeddings.** Retrieval embeddings are locked to `gemini-embedding-001` across all documents and queries to keep the vector space consistent regardless of which generation provider is active.
 
-**LangGraph for all three orchestration paths.** Ingestion, retrieval, and self-healing each run as a LangGraph `StateGraph` workflow. Each can run with live LLM calls or fall back to deterministic logic when no model is configured.
+**LangGraph for long-running workflows.** Retrieval and self-healing run as LangGraph `StateGraph` workflows. Ingestion uses a high-concurrency Celery pipeline with parallel LLM extraction artifacts and document-scoped consolidation.
 
 ---
 
