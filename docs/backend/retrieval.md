@@ -41,7 +41,9 @@ The question is classified into a type (e.g. factual, comparative, definitional)
 
 ## Step 2 — Load Repair Memory
 
-Before hitting the vector index, the pipeline checks for stored repair memory from prior low-confidence answers. Repair memory records pair a query pattern with improved source chunks and entity hints. If a matching record exists, its context is injected to improve retrieval without re-running the full repair.
+Before hitting the vector index, the pipeline builds bounded session context from recent chat turns. Recent questions, recent answers, referenced entities, and unresolved gaps are folded into a lightweight session summary so follow-up questions can inherit topic context without replaying the full transcript.
+
+The pipeline then checks for stored repair memory from prior low-confidence answers. Repair memory records pair a query pattern with improved source chunks and entity hints. If a matching record exists, its context is injected to improve retrieval without re-running the full repair.
 
 This closes the feedback loop: past repairs make future similar questions cheaper and more accurate.
 
@@ -75,6 +77,8 @@ Graph expansion finds named concepts the question references even when no chunk 
 | Vector similarity score | Primary | Raw cosine similarity from pgvector |
 | Chunk quality score | Modifier | Higher-quality chunks rank up |
 | Document quality score | Modifier | Chunks from better documents rank up |
+| Source authority | Modifier | Primary and secondary sources rank above unknown material |
+| Source freshness | Modifier | More recent published sources get a small boost |
 | Graph/entity hints | Modifier | Chunks mentioning matched entities rank up |
 
 The reranking step produces a final ordered list of chunks that combines semantic relevance with structural quality.
@@ -138,7 +142,7 @@ The frontend `ChatWindow` component consumes this stream via `EventSource` and p
 
 ## Chat Session State
 
-Each query is optionally associated with a `ChatSession`. Sessions store the full message history so the frontend can display prior conversations. Session context is not currently used to influence retrieval (each query is independent), but the history is available for future multi-turn reasoning.
+Each query is optionally associated with a `ChatSession`. Sessions store the full message history, and the retrieval pipeline now derives bounded session context from recent turns so follow-up questions can resolve references like “what about pricing?” against the current topic.
 
 `ChatMessage` records store:
 - `role`: `"user"` or `"assistant"`
@@ -164,7 +168,7 @@ When `confidence_score` is below threshold, the pipeline creates a `low_confiden
 }
 ```
 
-The self-healing runner can then search for alternative evidence and persist improved repair memory so the same question performs better next time.
+The self-healing runner can then search for alternative evidence and persist improved repair memory so the same question performs better next time. If the current brain still lacks evidence, the task remains unresolved and should be addressed by ingesting new supporting material.
 
 ---
 

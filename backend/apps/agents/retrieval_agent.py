@@ -19,6 +19,11 @@ from apps.retrieval.services.graph_search import expand_graph
 from apps.retrieval.services.query_memory import get_query_repair_memory
 from apps.retrieval.services.query_classifier import classify_query
 from apps.retrieval.services.reranker import rerank_results
+from apps.retrieval.services.session_context import (
+    build_contextual_question,
+    build_session_context,
+    refresh_session_summary,
+)
 from apps.retrieval.services.vector_search import search_chunks
 from apps.self_healing.models import SelfHealingTask
 
@@ -29,6 +34,8 @@ class RetrievalState(TypedDict, total=False):
     brain_id: str | None
     llm_provider: str | None
     llm_model: str | None
+    session_context: dict[str, Any]
+    contextual_question: str
     intent: str
     results: list[dict[str, Any]]
     graph_context: dict[str, Any]
@@ -40,14 +47,25 @@ class RetrievalState(TypedDict, total=False):
     persisted_session_id: int
 
 
+def load_session_context(state: RetrievalState) -> RetrievalState:
+    session_context = build_session_context(state.get("session_id"))
+    return {
+        "session_context": session_context,
+        "contextual_question": build_contextual_question(
+            state["question"],
+            session_context,
+        ),
+    }
+
+
 def classify_question(state: RetrievalState) -> RetrievalState:
-    return {"intent": classify_query(state["question"])}
+    return {"intent": classify_query(state["contextual_question"])}
 
 
 def load_repair_memory(state: RetrievalState) -> RetrievalState:
     return {
         "repair_memory": get_query_repair_memory(
-            state["question"],
+            state["contextual_question"],
             brain_id=state.get("brain_id"),
         )
     }
@@ -61,11 +79,9 @@ def retrieve_chunks(state: RetrievalState) -> RetrievalState:
         repair_memory.save(update_fields=["times_applied"])
     results = rerank_results(
         search_chunks(
-            state["question"],
+            state["contextual_question"],
             brain_id=state.get("brain_id"),
-            preferred_chunk_ids=(
-                repair_memory.recommended_chunk_ids if repair_memory else []
-            ),
+            preferred_chunk_ids=(repair_memory.recommended_chunk_ids if repair_memory else []),
             related_entity_ids=list(
                 dict.fromkeys(
                     [entity.id for entity in graph_context.get("entities", [])]
@@ -80,13 +96,18 @@ def retrieve_chunks(state: RetrievalState) -> RetrievalState:
 
 
 def expand_graph_context(state: RetrievalState) -> RetrievalState:
-    return {"graph_context": expand_graph(state["question"], brain_id=state.get("brain_id"))}
+    return {
+        "graph_context": expand_graph(
+            state["contextual_question"],
+            brain_id=state.get("brain_id"),
+        )
+    }
 
 
 def assess_gaps(state: RetrievalState) -> RetrievalState:
     gaps: list[str] = []
     top_chunks = state.get("top_chunks", [])
-    question = state["question"].lower()
+    question = state["contextual_question"].lower()
     joined_context = "\n".join(chunk.text.lower() for chunk in top_chunks)
     if len(top_chunks) < 2:
         gaps.append("Limited grounded evidence was found for this question.")
@@ -118,6 +139,7 @@ def synthesize_answer(state: RetrievalState) -> RetrievalState:
     graph_context = state["graph_context"]
     payload = synthesize_answer_payload(
         question=state["question"],
+        session_context=str(state.get("session_context", {}).get("summary", "")),
         top_chunks=state.get("top_chunks", []),
         related_entities=graph_context.get("entities", []),
         relationships=graph_context.get("relationships", []),
@@ -169,6 +191,11 @@ def persist_retrieval_result(state: RetrievalState, answer_payload: dict[str, An
             "knowledge_gaps": payload.get("knowledge_gaps", []),
             "contradiction_warnings": state["graph_context"].get("contradiction_warnings", []),
             "repair_memory_id": getattr(state.get("repair_memory"), "id", None),
+            "session_summary": state.get("session_context", {}).get("summary", ""),
+            "related_entities": [
+                {"id": entity.id, "name": entity.name, "type": entity.entity_type}
+                for entity in state["graph_context"].get("entities", [])[:6]
+            ],
             "llm_provider": state.get("llm_provider"),
             "llm_model": state.get("llm_model"),
         }
@@ -183,6 +210,7 @@ def persist_retrieval_result(state: RetrievalState, answer_payload: dict[str, An
             sources=sources,
             metadata=message_metadata,
         )
+        refresh_session_summary(session)
 
     task_created = False
     if payload["confidence_score"] < 0.6 or payload.get("knowledge_gaps"):
@@ -192,9 +220,13 @@ def persist_retrieval_result(state: RetrievalState, answer_payload: dict[str, An
             title="Low-confidence answer detected",
             description="The system found weak coverage for a user question.",
             brain_id=brain_id,
+            status=SelfHealingTask.STATUS_PENDING,
             payload=to_json_safe(
                 {
                     "question": state["question"],
+                    "contextual_question": state["contextual_question"],
+                    "session_id": session.id,
+                    "session_summary": state.get("session_context", {}).get("summary", ""),
                     "answer": payload["answer"],
                     "confidence_score": payload["confidence_score"],
                     "top_chunk_ids": payload.get("source_chunk_ids", []),
@@ -243,6 +275,7 @@ def run_retrieval_state(
         "llm_model": llm_model,
     }
     for step in (
+        load_session_context,
         classify_question,
         load_repair_memory,
         expand_graph_context,
@@ -279,6 +312,7 @@ def stream_question_answer(
     answer_parts: list[str] = []
     for token in stream_answer_text(
         question=state["question"],
+        session_context=str(state.get("session_context", {}).get("summary", "")),
         top_chunks=state.get("top_chunks", []),
         related_entities=graph_context.get("entities", []),
         relationships=graph_context.get("relationships", []),
@@ -304,6 +338,7 @@ def stream_question_answer(
 
 def build_retrieval_graph():
     builder = StateGraph(RetrievalState)
+    builder.add_node("load_session_context", load_session_context)
     builder.add_node("classify_question", classify_question)
     builder.add_node("load_repair_memory", load_repair_memory)
     builder.add_node("expand_graph_context", expand_graph_context)
@@ -311,7 +346,8 @@ def build_retrieval_graph():
     builder.add_node("assess_gaps", assess_gaps)
     builder.add_node("synthesize_answer", synthesize_answer)
     builder.add_node("persist_chat_and_tasks", persist_chat_and_tasks)
-    builder.add_edge(START, "classify_question")
+    builder.add_edge(START, "load_session_context")
+    builder.add_edge("load_session_context", "classify_question")
     builder.add_edge("classify_question", "load_repair_memory")
     builder.add_edge("load_repair_memory", "expand_graph_context")
     builder.add_edge("expand_graph_context", "retrieve_chunks")

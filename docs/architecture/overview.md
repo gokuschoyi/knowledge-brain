@@ -1,6 +1,6 @@
 # System Overview
 
-Knowledge Brain is an autonomous knowledge-engineering system that ingests unstructured documents, builds a structured knowledge graph, answers questions with source-grounded retrieval, and continuously improves itself through self-healing repair tasks.
+Knowledge Brain is an autonomous knowledge-engineering system that ingests unstructured documents, builds a structured knowledge graph, answers questions with source-grounded retrieval, and continuously improves knowledge quality through repair, review, and evidence-ingestion workflows.
 
 ---
 
@@ -14,9 +14,9 @@ Every document follows this path:
 
 1. **Ingest** — upload a file, URL, or raw text
 2. **Structure** — extract entities, claims, and relationships with LLM assistance
-3. **Retrieve** — answer questions using vector search + graph expansion
-4. **Evaluate** — score confidence; detect gaps, contradictions, duplicates
-5. **Repair** — run self-healing tasks to strengthen weak knowledge
+3. **Retrieve** — answer questions using vector search + graph expansion + bounded session context
+4. **Evaluate** — score confidence; detect gaps, contradictions, duplicates, and stale/weak evidence
+5. **Repair** — resolve safe tasks automatically, route contradictions to review, and request new evidence when the brain lacks support
 
 These stages form a feedback loop: retrieval surfaces weak spots, and repairs make future retrieval stronger.
 
@@ -64,7 +64,7 @@ These stages form a feedback loop: retrieval surfaces weak spots, and repairs ma
 
 | App | Responsibility |
 |-----|---------------|
-| `core` | Brain model (multi-tenant workspace), dashboard metrics, model catalog |
+| `core` | Brain model (multi-tenant workspace), dashboard trust and triage metrics, model catalog |
 | `documents` | Document storage, text extraction, chunking, embedding, ingestion jobs, V2 pipeline |
 | `knowledge` | Entities, claims, relationships, graph API, contradiction detection, enrichment |
 | `agents` | LLM model selection, prompts, structured output schemas, LangGraph workflow entrypoints |
@@ -106,12 +106,13 @@ Chat question arrives
 Retrieval Agent (LangGraph)
   ├─ Classify question
   ├─ Load query repair memory (from prior repairs)
+  ├─ Build bounded session context (recent turns, entities, gaps, summary)
   ├─ Expand graph context (entities, claims, relationships)
   ├─ Vector search: retrieve and rerank Chunks
   ├─ Assess knowledge gaps
   ├─ Calculate answer confidence
   ├─ Generate answer (top chunks + entity definitions + claims + relationships)
-  └─ If weak: create low_confidence_answer SelfHealingTask
+  └─ If weak: create low_confidence_answer SelfHealingTask, which resolves only if retrieval materially improves
 ```
 
 ---
@@ -123,6 +124,8 @@ Retrieval Agent (LangGraph)
 **Calibrated confidence instead of raw LLM scores.** Raw model confidence is preserved in metadata but is not used directly. A heuristic calibration layer converts it to a product-facing score that avoids saturation at `1.0`.
 
 **Graph is relationship-driven.** The graph endpoint returns connected entity nodes with their relationship edges, plus isolated entities separately. Document nodes are not part of the graph contract.
+
+**Trust is composite, not binary.** The dashboard trust score blends source authority, source freshness, claim review coverage, and contradiction pressure instead of simply checking whether documents have metadata.
 
 **Fixed Gemini embeddings.** Retrieval embeddings are locked to `gemini-embedding-001` across all documents and queries to keep the vector space consistent regardless of which generation provider is active.
 

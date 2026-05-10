@@ -28,7 +28,7 @@ Owns the full lifecycle from raw upload to embedded chunks.
 
 | Model | Key fields |
 |-------|-----------|
-| `Document` | `brain`, `title`, `source_type` (text/file/url), `status` (pending/processing/completed/failed), `content`, `quality_score`, `summary` |
+| `Document` | `brain`, `title`, `source_type` (text/file/url), `source_authority`, `source_published_at`, `source_observed_at`, `status` (pending/processing/completed/failed), `quality_score`, `summary` |
 | `IngestionJob` | `document`, `status`, `stages` (JSON progress log), `error_message` |
 | `Chunk` | `document`, `index`, `text`, `summary`, `embedding` (pgvector), `quality_score`, `token_count` |
 | `ChunkExtractionArtifact` | `chunk`, `job`, `status` (queued/running/completed/failed), `payload` (raw bundled extraction JSON), `error_message`, `attempt_count` |
@@ -54,10 +54,10 @@ Owns the structured knowledge graph produced by ingestion.
 |-------|-----------|
 | `Entity` | `brain`, `name`, `canonical_name`, `description`, `aliases`, `confidence`, `retrieval_text`, `mention_count`, `is_contradictory` |
 | `ChunkEntityMention` | `chunk`, `entity`, `mention_text`, `confidence` |
-| `Claim` | `brain`, `text`, `subject_entity`, `confidence`, `is_contradicted`, `metadata` |
+| `Claim` | `text`, `subject_entity`, `confidence`, `contradiction_flag`, `contradiction_review_state`, `metadata` |
 | `Relationship` | `source_entity`, `target_entity`, `label`, `normalized_type`, `confidence`, `evidence_chunk` |
-| `ChatSession` | `brain`, `title`, `messages` (JSON) |
-| `ChatMessage` | `session`, `role`, `content`, `sources`, `confidence`, `knowledge_gaps` |
+| `ChatSession` | `brain`, `title`, `summary` |
+| `ChatMessage` | `session`, `role`, `content`, `sources`, `metadata` |
 
 ---
 
@@ -84,9 +84,10 @@ Owns the retrieval pipeline and chat answer management.
 **Key services:**
 - Vector search over `Chunk.embedding` using pgvector cosine similarity
 - Graph expansion: pulls in entity definitions, claims, and relationship edges connected to top chunks
-- Multi-signal reranking: combines retrieval score, chunk quality, document quality, and graph hints
+- Multi-signal reranking: combines retrieval score, chunk quality, document quality, graph hints, source authority, and source freshness
 - `confidence.py` — computes final answer confidence from reranked scores and gap penalties
-- Repair memory: reusable query-answer pairs persisted from prior low-confidence repairs
+- Session context: bounded recent-turn summaries that help follow-up questions retrieve against the current topic
+- Repair memory: reusable query-answer pairs persisted from prior low-confidence recovery
 
 ---
 
@@ -98,7 +99,7 @@ Owns repair task records and the repair runner.
 
 | Model | Key fields |
 |-------|-----------|
-| `SelfHealingTask` | `brain`, `task_type`, `status` (pending/running/completed/failed/ignored), `payload` (repair input), `result` (repair output), `related_document`, `related_entity` |
+| `SelfHealingTask` | `brain`, `task_type`, `status` (pending/running/resolved/unresolved/review_required/failed/ignored), `payload` (repair input), `result` (repair output), `related_document`, `related_entity` |
 
 **Task types:** `duplicate_entity`, `missing_definition`, `low_confidence_answer`, `contradiction`, `orphan_chunk`
 
