@@ -10,12 +10,12 @@ The frontend has eight pages, all children of the root `App` layout. Every page 
 
 **What it shows:**
 - Document count, chunk count, entity count, claim count, relationship count
-- Average document quality score
-- Pending self-healing task count
-- Recent ingestion activity
+- Composite evidence trust score across authority, freshness, claim review coverage, and contradiction pressure
+- Open repair pressure plus recommended next actions
+- Analytics bars for extraction, entity linkage, quality, trust, and repair pressure
 
 **Key interactions:**
-- Read-only metrics view; acts as the landing page and starting point for demos
+- Read-only triage view; action cards deep-link into graph, documents, and self-healing filters
 
 **API calls:**
 - `GET /api/dashboard/?brain_id=…`
@@ -50,6 +50,7 @@ The frontend has eight pages, all children of the root `App` layout. Every page 
 
 **What it shows:**
 - Upload form (drag-and-drop file, paste text, or enter URL)
+- Source authority selector and optional published date metadata
 - LLM provider/model selector (from model catalog)
 - Recent ingestion jobs with status indicators
 - Per-job stage breakdown: text extraction → chunking → chunk extraction → finalization
@@ -75,11 +76,11 @@ The frontend has eight pages, all children of the root `App` layout. Every page 
 **Purpose:** Browse all ingested documents in the active brain.
 
 **What it shows:**
-- Document list with title, source type, status, quality score, and ingestion date
+- Document list with title, source type, source authority, status, quality score, and ingestion date
 - Status indicators (pending / processing / completed / failed)
 
 **Key interactions:**
-- Filter by status
+- Filter by query params such as related entity or status
 - Click a document to navigate to Document Detail
 - Delete a document (with confirmation modal)
 
@@ -122,6 +123,7 @@ The frontend has eight pages, all children of the root `App` layout. Every page 
 - Knowledge gaps panel: gaps detected during retrieval
 - Confidence badge on each assistant response
 - Session history sidebar (prior conversations)
+- Bounded multi-turn context carried through recent session summary and prior entities/gaps
 
 **Key interactions:**
 - Submit a question (keyboard shortcut: `Enter`)
@@ -146,13 +148,14 @@ The frontend has eight pages, all children of the root `App` layout. Every page 
 - Node labels (entity names) and edge labels (relationship types)
 - Colour/opacity coding for confidence levels
 - Isolated entities panel: entities with no relationships (separate tab)
-- Node details panel: slides in on node selection — shows entity description, confidence, and linked claims
+- Node details panel: shows entity description, confidence, issue count, supporting documents, and drill-in actions
 
 **Key interactions:**
 - Pan and zoom the graph canvas
 - Click a node to select it and open the details panel
 - Search for an entity by name (centres and highlights the matching node)
 - Switch between connected graph and isolated entities tabs
+- Jump from a selected node into supporting documents or contradiction-focused repair views
 
 **API calls:**
 - `GET /api/graph/?brain_id=…`
@@ -164,13 +167,15 @@ The frontend has eight pages, all children of the root `App` layout. Every page 
 **Purpose:** Monitor, review, and execute repair tasks.
 
 **What it shows:**
-- Task list filtered by status (pending, running, completed, failed, ignored) and type
+- Task list filtered by status (`pending`, `running`, `resolved`, `unresolved`, `review_required`, `failed`, `ignored`) and type
 - Task cards showing type, trigger entity/document, status, and creation date
 - Task detail panel: full `payload` (input) and `result` (output) for selected task
 - Auto-repair configuration panel for the active brain
+- Evidence attachment flow for low-confidence and contradiction tasks
 
 **Key interactions:**
 - Run a single task manually
+- Attach new text, file, or URL evidence to the active brain from a task
 - Ignore a task (marks it so auto-repair skips it)
 - Delete a task record
 - Run all pending tasks in one action
@@ -179,6 +184,7 @@ The frontend has eight pages, all children of the root `App` layout. Every page 
 **API calls:**
 - `GET /api/self-healing/tasks/?brain_id=…`
 - `POST /api/self-healing/tasks/:id/run/`
+- `POST /api/self-healing/tasks/:id/evidence/`
 - `POST /api/self-healing/tasks/:id/ignore/`
 - `DELETE /api/self-healing/tasks/:id/`
 - `POST /api/self-healing/run/`

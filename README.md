@@ -1,6 +1,6 @@
 # Knowledge Brain
 
-Knowledge Brain is an autonomous knowledge-engineering agent that ingests unstructured content, converts it into a structured knowledge graph, answers questions with source-grounded retrieval, and self-heals over time — detecting duplicates, missing definitions, and contradictions automatically.
+Knowledge Brain is an autonomous knowledge-engineering agent that ingests unstructured content, converts it into a structured knowledge graph, answers questions with source-grounded retrieval, and continuously improves its knowledge quality over time.
 
 ## Why it's different from plain RAG
 
@@ -8,9 +8,9 @@ Standard RAG chunks text and retrieves by similarity. Knowledge Brain goes furth
 
 - **Extracts** entities, claims, and relationships from every chunk using structured LLM output
 - **Calibrates** confidence with heuristics — raw model scores are preserved but not trusted directly
-- **Retrieves** by combining vector similarity with graph expansion (entity definitions, claims, relationships)
+- **Retrieves** by combining vector similarity with graph expansion (entity definitions, claims, relationships) plus bounded multi-turn session context
 - **Evaluates** every answer for gaps and confidence, and surfaces what it doesn't know
-- **Repairs** weak knowledge automatically — merging duplicates, writing missing definitions, flagging contradictions
+- **Repairs** weak knowledge where safe, and escalates review-only or evidence-needed cases honestly
 
 ---
 
@@ -73,7 +73,7 @@ The system combines one queue-based ingestion pipeline with two LangGraph `State
 
 - **Ingestion** — queue-based chunk-level LLM extraction, document-scoped consolidation, knowledge graph persistence
 - **Retrieval** — query classification, graph context expansion, vector search, multi-signal reranking, answer synthesis
-- **Self-Healing** — task-type-routed repair handlers for duplicates, missing definitions, low-confidence answers, and contradictions
+- **Self-Healing** — task-type-routed handlers for duplicates, missing definitions, low-confidence answers, and contradictions with `resolved`, `unresolved`, and `review_required` outcomes
 
 Retrieval embeddings are fixed to Gemini (`gemini-embedding-001`) across all documents and queries to keep the vector space consistent regardless of which generation provider is active. All LLM calls fall back to deterministic logic when no API key is configured.
 
@@ -86,10 +86,12 @@ Retrieval embeddings are fixed to Gemini (`gemini-embedding-001`) across all doc
 - **Automated Verification Pass**: Double-checks empty extractions to reduce false negatives
 - **Robust Parsing**: Unified `invoke_structured_output` helper for stable cross-provider JSON/Tool parsing
 - Confidence calibration layer — heuristic scoring, not raw LLM values
-- Source-grounded chat with streaming answers and confidence scoring
+- Source-grounded chat with streaming answers, confidence scoring, and bounded session-aware retrieval
 - Knowledge gap detection and surfacing in chat responses
 - Interactive knowledge graph (React Flow + ELK layout)
-- Self-healing task queue: duplicate merge, definition writing, contradiction review
+- Self-healing task queue with evidence attachment for low-confidence and contradiction tasks
+- Source authority and freshness metadata on ingested documents
+- Composite dashboard trust signal across authority, freshness, claim review coverage, and contradiction pressure
 - Configurable auto-repair scheduling per knowledge brain
 - Multi-tenant knowledge brains (isolated domains)
 - Optional LangSmith tracing for workflow observability

@@ -100,12 +100,15 @@ Upload a document for ingestion. Accepts `multipart/form-data` (file upload) or 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `brain_id` | UUID | Yes | Target brain |
+| `brain` | UUID | Yes | Target brain |
 | `source_type` | string | Yes | `"text"`, `"file"`, or `"url"` |
 | `title` | string | No | Display name |
-| `content` | string | For `text` | Raw text content |
-| `file` | file | For `file` | Uploaded file (PDF, TXT, DOCX, …) |
+| `raw_text` | string | For `text` | Raw text content |
+| `raw_file` | file | For `file` | Uploaded file (PDF, TXT, DOCX, …) |
 | `url` | string | For `url` | URL to fetch and ingest |
+| `source_authority` | string | No | `"primary"`, `"secondary"`, `"user_provided"`, or `"unknown"` |
+| `source_published_at` | ISO datetime | No | Source publication timestamp |
+| `source_observed_at` | ISO datetime | No | When the source was observed or captured |
 
 **Response `201`:**
 ```json
@@ -116,9 +119,9 @@ Upload a document for ingestion. Accepts `multipart/form-data` (file upload) or 
 
 List documents.
 
-**Query params:** `brain_id` (UUID)
+**Query params:** `brain_id` (UUID), `entity_id` (int)
 
-**Response `200`:** Array of document objects with `id`, `title`, `status`, `quality_score`, `source_type`, `created_at`.
+**Response `200`:** Array of document objects with `id`, `title`, `status`, `quality_score`, `source_type`, `source_authority`, `source_published_at`, `source_observed_at`, and `created_at`.
 
 ### `GET /api/documents/:id/`
 
@@ -226,7 +229,10 @@ Submit a question and receive a complete answer in one response.
     { "chunk_id": 101, "text": "…", "document_title": "…", "score": 0.91 }
   ],
   "knowledge_gaps": ["Pricing details not found in knowledge base"],
-  "session_id": 3
+  "session_id": 3,
+  "related_entities": [
+    { "id": 12, "name": "Smart Tutor", "type": "product" }
+  ]
 }
 ```
 
@@ -253,7 +259,7 @@ List chat sessions.
 
 **Query params:** `brain_id` (UUID)
 
-**Response `200`:** Array of session objects with `id`, `title`, `brain_id`, `created_at`, and `messages`.
+**Response `200`:** Array of session objects with `id`, `title`, `summary`, `created_at`, and `messages`.
 
 ### `GET /api/chat/sessions/:id/`
 
@@ -269,7 +275,7 @@ List entities.
 
 **Query params:** `brain_id` (UUID)
 
-**Response `200`:** Array of entity objects with `id`, `name`, `description`, `confidence`, `mention_count`, `aliases`, `is_contradictory`.
+**Response `200`:** Array of entity objects with `id`, `name`, `description`, `confidence`, `mention_count`, `aliases`, and contradiction metadata stored in `metadata`.
 
 ### `GET /api/entities/:id/`
 
@@ -285,7 +291,7 @@ List claims.
 
 **Query params:** `brain_id` (UUID)
 
-**Response `200`:** Array of claim objects with `id`, `text`, `subject_entity`, `confidence`, `is_contradicted`.
+**Response `200`:** Array of claim objects with `id`, `text`, `subject_entity`, `confidence`, `contradiction_flag`, and `contradiction_review_state`.
 
 ---
 
@@ -314,7 +320,7 @@ Returns the full graph payload for a brain, pre-shaped for the frontend.
 }
 ```
 
-Document nodes are intentionally excluded. `connected_graph` contains only entity nodes with at least one relationship edge. `isolated_entities` contains entity nodes with no edges.
+Document nodes are intentionally excluded. `connected_graph` contains only entity nodes with at least one relationship edge. Node payloads now include supporting document summaries, issue counts, and contradiction hints. `isolated_entities` contains entity nodes with no edges.
 
 ---
 
@@ -324,7 +330,7 @@ Document nodes are intentionally excluded. `connected_graph` contains only entit
 
 List repair tasks.
 
-**Query params:** `brain_id` (UUID), `status` (pending/running/completed/failed/ignored), `task_type`
+**Query params:** `brain_id` (UUID), `related_entity_id` (int), `task_type`
 
 **Response `200`:** Array of task objects with `id`, `task_type`, `status`, `payload`, `result`, `related_document`, `related_entity`, `created_at`.
 
@@ -332,7 +338,24 @@ List repair tasks.
 
 Execute a single repair task immediately.
 
-**Response `200`:** Updated task object with `status: "completed"` or `"failed"` and `result`.
+**Response `200`:** Queue acknowledgement for the repair run. Final task outcomes are one of `resolved`, `unresolved`, `review_required`, `failed`, or `ignored`.
+
+### `POST /api/self-healing/tasks/:id/evidence/`
+
+Attach new evidence to a low-confidence or contradiction task by creating a normal ingestion job in the same brain.
+
+**Request fields:** same ingest fields as `POST /api/documents/ingest/`, plus optional `rerun_task` boolean.
+
+**Response `201`:**
+```json
+{
+  "document_id": 42,
+  "job_id": 17,
+  "status": "pending",
+  "task_id": 9,
+  "rerun_task_recommended": true
+}
+```
 
 ### `POST /api/self-healing/tasks/:id/ignore/`
 
@@ -357,7 +380,7 @@ Run all pending tasks for a brain in sequence.
 
 **Response `200`:**
 ```json
-{ "ran": 5, "completed": 4, "failed": 1 }
+{ "queued_task_ids": [4, 5, 8] }
 ```
 
 ---

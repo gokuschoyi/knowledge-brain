@@ -42,13 +42,13 @@ All API calls are defined in [src/api/](../../frontend/src/api/). Each file corr
 
 | File | Covers |
 |------|--------|
-| `documents.ts` | Document list, detail, ingest, delete, retry |
+| `documents.ts` | Document list, detail, ingest, delete, retry, entity-scoped filtering |
 | `ingestion.ts` | Ingestion job detail and SSE event stream |
 | `chat.ts` | Chat query (POST) and streaming query (SSE) |
 | `graph.ts` | Knowledge graph endpoint |
 | `entities.ts` | Entity list, detail, relationships |
 | `claims.ts` | Claim list |
-| `selfHealing.ts` | Task list, run task, ignore task, run all |
+| `selfHealing.ts` | Task list, run task, attach evidence, ignore task, run all |
 | `dashboard.ts` | Dashboard metrics |
 | `brains.ts` | Brain CRUD |
 | `models.ts` | Model catalog |
@@ -71,7 +71,7 @@ Two flows use Server-Sent Events (SSE) rather than standard JSON responses:
 
 **Ingestion events** (`GET /api/ingestion/jobs/:id/events/`) — emits stage progress events as the pipeline advances through extraction, chunking, LLM extraction, and finalization.
 
-Both streams are consumed using `EventSource` (or `fetch` with `ReadableStream`) and feed into React Query's cache invalidation on completion.
+Both streams are consumed using `EventSource`-style browser streaming (or `fetch` with `ReadableStream`) and feed into React Query's cache invalidation on completion.
 
 ---
 
@@ -108,7 +108,7 @@ The flow:
 1. `GET /api/graph/?brain_id=…` returns `connected_graph` (entities + relationships) and `isolated_entities`
 2. ELK runs client-side to compute node positions using a layered hierarchical algorithm
 3. React Flow renders the positioned graph with custom node and edge components
-4. A `NodeDetailsPanel` slides in when a node is selected, showing entity description, confidence, and linked claims
+4. A node details panel exposes entity description, confidence, supporting documents, issue count, and drill-in actions into documents and self-healing
 
 The graph tab bar switches between the connected graph view and the isolated entities panel without a full page reload.
 

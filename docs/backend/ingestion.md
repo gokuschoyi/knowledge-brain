@@ -68,9 +68,10 @@ Upload received
     ▼
 11. Contradiction Detection
     │   Group claims by normalised subject
-    │   Look for conflicting numeric values (price-like patterns)
+    │   Compare structured fact shapes such as prices, dates, quantities,
+    │   versions, and categorical conflicts
     │   Flag claims and entities as contradictory
-    │   Generate contradiction SelfHealingTasks
+    │   Generate contradiction SelfHealingTasks for review
     │
     ▼
 12. Document Quality Scoring
@@ -174,10 +175,19 @@ A `missing_definition` task is created pointing at the `entity_id`.
 
 ### Contradiction Detection
 
-Claims are grouped by a normalised subject key. Within each group, the detector looks for numeric values attached to the same subject that differ significantly (especially price-like patterns: `$X`, `X USD`). When found:
+Claims are grouped by a normalised subject key. Within each group, the detector compares several structured conflict patterns, including:
+- price-like values
+- dates
+- quantities
+- versions
+- categorical fact disagreements where the extracted shape is comparable
+
+When a conflict is found:
 - Conflicting claims are flagged `is_contradicted = True`
 - Related entities are flagged `is_contradictory = True`
 - A `contradiction` task is created with the conflicting claim payload
+
+These tasks are review-oriented. They surface the conflicting evidence but do not auto-resolve the truth of the claim.
 
 ---
 
