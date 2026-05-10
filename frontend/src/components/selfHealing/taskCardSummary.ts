@@ -98,11 +98,11 @@ export function getTaskCardSummary(task: SelfHealingTask): TaskCardSummary {
       const evidenceCount = asArray(task.result.evidence_chunk_ids).length;
       summary.primaryLabel = task.related_entity_name || 'Missing definition';
       summary.secondaryText =
-        task.status === 'completed'
+        task.status === 'resolved'
           ? 'Definition updated from document evidence'
           : 'Will generate a stronger definition from document evidence';
       summary.outcomeText =
-        task.status === 'completed'
+        task.status === 'resolved'
           ? evidenceCount > 0
             ? `Definition updated using ${formatCount(evidenceCount, 'evidence chunk')}`
             : 'Definition updated'
@@ -117,11 +117,11 @@ export function getTaskCardSummary(task: SelfHealingTask): TaskCardSummary {
       const mergedCount = asArray(task.result.merged_entity_ids).length;
       summary.primaryLabel = task.related_entity_name || 'Duplicate entities';
       summary.secondaryText =
-        task.status === 'completed'
+        task.status === 'resolved'
           ? 'Duplicate entities were merged and references were rewired'
           : 'Will merge duplicate entities and rewire references';
       summary.outcomeText =
-        task.status === 'completed'
+        task.status === 'resolved'
           ? mergedCount > 0
             ? `Merged ${formatCount(mergedCount, 'duplicate')}`
             : 'Entities merged'
@@ -146,17 +146,15 @@ export function getTaskCardSummary(task: SelfHealingTask): TaskCardSummary {
       summary.showConfidence = confidence !== null;
       summary.confidenceValue = confidence;
       summary.outcomeText =
-        task.status === 'completed'
-          ? resultStatus === 'improved'
-            ? 'Found improved evidence'
-            : resultStatus === 'unresolved'
-              ? 'Still unresolved'
-              : 'Repair completed'
-          : task.status === 'failed'
-            ? 'Repair failed'
-            : task.status === 'ignored'
-              ? 'Ignored'
-              : null;
+        task.status === 'resolved'
+          ? 'Found stronger grounded evidence'
+          : task.status === 'unresolved'
+            ? 'Needs more evidence'
+            : task.status === 'failed'
+              ? 'Repair failed'
+              : task.status === 'ignored'
+                ? 'Ignored'
+                : null;
       return summary;
     }
     case 'contradiction': {
@@ -167,8 +165,8 @@ export function getTaskCardSummary(task: SelfHealingTask): TaskCardSummary {
           ? `Manual review required across ${formatCount(claimCount, 'conflicting claim')}`
           : 'Manual review required for conflicting claims';
       summary.outcomeText =
-        task.status === 'completed'
-          ? 'Prepared for review'
+        task.status === 'review_required'
+          ? 'Needs human review'
           : task.status === 'failed'
             ? 'Review preparation failed'
             : task.status === 'ignored'
@@ -196,9 +194,13 @@ export function getTaskCardSummary(task: SelfHealingTask): TaskCardSummary {
           ? 'Repair failed'
           : task.status === 'ignored'
             ? 'Ignored'
-            : task.status === 'completed'
+            : task.status === 'resolved'
               ? 'Repair completed'
-              : null;
+              : task.status === 'review_required'
+                ? 'Review required'
+                : task.status === 'unresolved'
+                  ? 'Still unresolved'
+                  : null;
       return summary;
     }
   }

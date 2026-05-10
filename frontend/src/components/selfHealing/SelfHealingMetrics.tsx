@@ -5,7 +5,9 @@ import { Card } from '../common/Card';
 type Summary = {
   pending: number;
   running: number;
-  completed: number;
+  resolved: number;
+  unresolved: number;
+  reviewRequired: number;
   failed: number;
 };
 
@@ -15,7 +17,7 @@ type Props = {
 
 export function SelfHealingMetrics({ summary }: Props) {
   return (
-    <Grid templateColumns={{ base: '1fr 1fr', xl: 'repeat(4, 1fr)' }} gap='4'>
+    <Grid templateColumns={{ base: '1fr 1fr', xl: 'repeat(6, 1fr)' }} gap='4'>
       <Card variant='metric' px={4} py={3}>
         <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
           Pending
@@ -34,10 +36,26 @@ export function SelfHealingMetrics({ summary }: Props) {
       </Card>
       <Card variant='metric' px={4} py={3}>
         <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
-          Completed
+          Resolved
         </Text>
         <Heading size='lg' color='green.300'>
-          {summary.completed}
+          {summary.resolved}
+        </Heading>
+      </Card>
+      <Card variant='metric' px={4} py={3}>
+        <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
+          Unresolved
+        </Text>
+        <Heading size='lg' color='orange.300'>
+          {summary.unresolved}
+        </Heading>
+      </Card>
+      <Card variant='metric' px={4} py={3}>
+        <Text fontSize='xs' color='slate.500' textTransform='uppercase'>
+          Review
+        </Text>
+        <Heading size='lg' color='purple.300'>
+          {summary.reviewRequired}
         </Heading>
       </Card>
       <Card variant='metric' px={4} py={3}>

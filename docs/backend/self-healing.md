@@ -20,7 +20,7 @@ Tasks are created in two places:
 |------|---------|-------------|
 | `duplicate_entity` | Two or more entities with similar normalised names appear during ingestion | Merges entities and rewires all references |
 | `missing_definition` | An entity is mentioned repeatedly but has a weak or empty description | Generates a grounded definition from evidence |
-| `low_confidence_answer` | A chat answer confidence is below threshold | Finds better evidence; persists repair memory |
+| `low_confidence_answer` | A chat answer confidence is below threshold | Retries retrieval, persists repair memory if meaningfully improved, otherwise stays unresolved |
 | `contradiction` | Conflicting claims detected for the same subject | Surfaces a review payload — does not auto-resolve |
 | `orphan_chunk` | Reserved task type | No automated repair runner yet |
 
@@ -29,7 +29,9 @@ Tasks are created in two places:
 ## Task Lifecycle
 
 ```
-PENDING → RUNNING → COMPLETED
+PENDING → RUNNING → RESOLVED
+                 ↘ UNRESOLVED
+                 ↘ REVIEW_REQUIRED
                  ↘ FAILED
 PENDING → IGNORED
 ```
@@ -106,10 +108,10 @@ This is the most structurally impactful repair — it changes the graph topology
 1. Generates alternative query variants of the original question
 2. Runs expanded vector search and graph context expansion with the variants
 3. Evaluates whether the new evidence would produce a stronger answer
-4. If improved: persists a `QueryRepairMemory` record pairing the question pattern with the better evidence context
-5. Returns `{ "status": "improved" }` or `{ "status": "unresolved" }`
+4. If confidence improves or one or more gaps close: persists a `QueryRepairMemory` record pairing the question pattern with the better evidence context
+5. Returns a resolved outcome only when the retry is materially better; otherwise returns `unresolved`
 
-This handler does not directly rewrite the stored answer. Its value is that the persisted repair memory makes the **next** time the same question is asked faster and more confident.
+This handler does not directly rewrite the stored answer. Its value is that the persisted repair memory makes the **next** time the same question is asked faster and more confident. If the current brain still lacks evidence, the task stays unresolved and the recommended next step is to ingest clarifying text or a new source file.
 
 ---
 
@@ -117,7 +119,7 @@ This handler does not directly rewrite the stored answer. Its value is that the 
 
 **What it does:**
 
-Returns a review payload containing the conflicting claims and their source evidence. It does **not** auto-resolve contradictions because resolving conflicting facts requires human judgement.
+Returns a review payload containing the conflicting claims and their source evidence. It does **not** auto-resolve contradictions because resolving conflicting facts requires human judgement. Running the task moves it to `review_required`, not a repaired state.
 
 The frontend `SelfHealingPage` displays the review result so a user can read the conflicting claims and decide which is authoritative.
 
@@ -148,6 +150,7 @@ The `SelfHealingPage` provides:
 - A task list filtered by status and type
 - A task detail panel showing `payload` (input) and `result` (output)
 - Run, ignore, and delete controls per task
+- Add-evidence controls for low-confidence and contradiction tasks that create normal ingestion jobs inside the active brain
 - Auto-repair configuration panel per brain
 
 ---

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Box, Grid, Stack, Text } from '@chakra-ui/react';
+import { useLocation } from 'react-router-dom';
 
 import {
+  attachSelfHealingEvidence,
   deleteSelfHealingTask,
   ignoreSelfHealingTask,
   listSelfHealingTasks,
@@ -22,6 +24,10 @@ import { RepairResultPanel } from '../components/selfHealing/RepairResultPanel';
 import { SelfHealingMetrics } from '../components/selfHealing/SelfHealingMetrics';
 import { TaskTypeFilterBar } from '../components/selfHealing/TaskTypeFilterBar';
 import { SelfHealingFab } from '../components/selfHealing/SelfHealingFab';
+import {
+  EvidenceUploadDialog,
+  type EvidenceUploadValue,
+} from '../components/selfHealing/EvidenceUploadDialog';
 import { Card } from '../components/common/Card';
 import { useActiveBrain } from '../context/useActiveBrain';
 import type { SelfHealingTask } from '../api/types';
@@ -36,12 +42,23 @@ const RUNNABLE_REPAIR_TYPES = [
 
 export function SelfHealingPage() {
   const { activeBrainId } = useActiveBrain();
+  const location = useLocation();
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isAutoRepairDialogOpen, setIsAutoRepairDialogOpen] = useState(false);
+  const [evidenceDialogTask, setEvidenceDialogTask] =
+    useState<SelfHealingTask | null>(null);
+  const [lastEvidenceMessage, setLastEvidenceMessage] = useState<string | null>(
+    null,
+  );
   const [activePolledTaskIds, setActivePolledTaskIds] = useState<number[]>([]);
   const [activeTaskTypeFilter, setActiveTaskTypeFilter] = useState<
     string | null
-  >(null);
+  >(() => new URLSearchParams(location.search).get('task_type'));
+  const relatedEntityIdFilter = useMemo(() => {
+    const raw = new URLSearchParams(location.search).get('related_entity_id');
+    return raw ? Number(raw) : null;
+  }, [location.search]);
+
   const [pendingDeleteTask, setPendingDeleteTask] = useState<{
     id: number;
     title: string;
@@ -61,8 +78,17 @@ export function SelfHealingPage() {
     queryFn: getBrains,
   });
   const tasksQuery = useQuery({
-    queryKey: ['self-healing', activeBrainId],
-    queryFn: () => listSelfHealingTasks(activeBrainId || undefined),
+    queryKey: [
+      'self-healing',
+      activeBrainId,
+      activeTaskTypeFilter,
+      relatedEntityIdFilter,
+    ],
+    queryFn: () =>
+      listSelfHealingTasks(activeBrainId || undefined, {
+        taskType: activeTaskTypeFilter,
+        relatedEntityId: relatedEntityIdFilter,
+      }),
     enabled: !!activeBrainId,
     refetchInterval: (query) => {
       const data = query.state.data as SelfHealingTask[];
@@ -94,6 +120,36 @@ export function SelfHealingPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['self-healing'] });
       setPendingDeleteTask(null);
+    },
+  });
+  const attachEvidenceMutation = useMutation({
+    mutationFn: ({
+      taskId,
+      value,
+    }: {
+      taskId: number;
+      value: EvidenceUploadValue;
+    }) => {
+      const payload = new FormData();
+      payload.append('title', value.title);
+      payload.append('source_type', value.sourceType);
+      payload.append('source_authority', value.sourceAuthority);
+      payload.append('rerun_task', String(value.rerunTask));
+      if (value.sourceType === 'text') {
+        payload.append('raw_text', value.rawText);
+      } else if (value.sourceType === 'url') {
+        payload.append('url', value.url);
+      } else if (value.sourceType === 'file' && value.file) {
+        payload.append('raw_file', value.file);
+      }
+      return attachSelfHealingEvidence(taskId, payload);
+    },
+    onSuccess: (response) => {
+      setLastEvidenceMessage(
+        `Evidence queued as document #${response.document_id}. Re-run the task after ingestion completes for the new evidence to be considered.`,
+      );
+      setEvidenceDialogTask(null);
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
     },
   });
   const runAllMutation = useMutation({
@@ -136,12 +192,7 @@ export function SelfHealingPage() {
   }, [rawTasks]);
 
   const tasks = useMemo(() => {
-    let filtered = rawTasks;
-    if (activeTaskTypeFilter) {
-      filtered = filtered.filter((t) => t.task_type === activeTaskTypeFilter);
-    }
-
-    return [...filtered].sort((a, b) => {
+    return [...rawTasks].sort((a, b) => {
       if (b.priority !== a.priority) {
         return b.priority - a.priority;
       }
@@ -149,7 +200,7 @@ export function SelfHealingPage() {
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
     });
-  }, [rawTasks, activeTaskTypeFilter]);
+  }, [rawTasks]);
 
   const selectedTaskId =
     selectionState.brainId === activeBrainId
@@ -167,7 +218,10 @@ export function SelfHealingPage() {
     () => ({
       pending: tasks.filter((task) => task.status === 'pending').length,
       running: tasks.filter((task) => task.status === 'running').length,
-      completed: tasks.filter((task) => task.status === 'completed').length,
+      resolved: tasks.filter((task) => task.status === 'resolved').length,
+      unresolved: tasks.filter((task) => task.status === 'unresolved').length,
+      reviewRequired: tasks.filter((task) => task.status === 'review_required')
+        .length,
       failed: tasks.filter((task) => task.status === 'failed').length,
     }),
     [tasks],
@@ -185,7 +239,9 @@ export function SelfHealingPage() {
         .filter(
           (task) =>
             activeTaskIdSet.has(task.id) &&
-            (task.status === 'completed' ||
+            (task.status === 'resolved' ||
+              task.status === 'unresolved' ||
+              task.status === 'review_required' ||
               task.status === 'failed' ||
               task.status === 'ignored'),
         )
@@ -259,6 +315,15 @@ export function SelfHealingPage() {
     <Stack gap='6' h='full' minH='0' position='relative'>
       {tasks.length ? (
         <>
+          {lastEvidenceMessage ? (
+            <Box px={6} pt={6}>
+              <Card variant='panel'>
+                <Text fontSize='sm' color='slate.300'>
+                  {lastEvidenceMessage}
+                </Text>
+              </Card>
+            </Box>
+          ) : null}
           <Box px={6} pt={6}>
             <SelfHealingMetrics summary={summary} />
           </Box>
@@ -300,6 +365,9 @@ export function SelfHealingPage() {
               }}
               onRun={async (id) => {
                 await runMutation.mutateAsync(id);
+              }}
+              onAddEvidence={(task) => {
+                setEvidenceDialogTask(task);
               }}
               onIgnore={async (id) => {
                 await ignoreMutation.mutateAsync(id);
@@ -344,6 +412,22 @@ export function SelfHealingPage() {
         onConfirm={() => {
           if (!pendingDeleteTask) return;
           void deleteMutation.mutateAsync(pendingDeleteTask.id);
+        }}
+      />
+
+      <EvidenceUploadDialog
+        isOpen={!!evidenceDialogTask}
+        task={evidenceDialogTask}
+        isSubmitting={attachEvidenceMutation.isPending}
+        onOpenChange={(open) => {
+          if (!open) setEvidenceDialogTask(null);
+        }}
+        onSubmit={async (value) => {
+          if (!evidenceDialogTask) return;
+          await attachEvidenceMutation.mutateAsync({
+            taskId: evidenceDialogTask.id,
+            value,
+          });
         }}
       />
 

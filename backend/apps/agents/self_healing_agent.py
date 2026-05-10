@@ -16,6 +16,7 @@ from apps.knowledge.services.retrieval_enrichment import enrich_entity, enrich_e
 class RepairState(TypedDict, total=False):
     task: SelfHealingTask
     route: str
+    task_status: str
     result: dict
 
 
@@ -45,57 +46,74 @@ def route_label(state: RepairState) -> str:
 
 def run_duplicate_entity_repair(state: RepairState) -> RepairState:
     task = state["task"]
+    result = repair_duplicate_entities(
+        candidate_entity_ids=task.payload.get("candidate_entity_ids", []),
+        suggested_canonical_name=task.payload.get("suggested_canonical_name", ""),
+    )
     return {
-        "result": repair_duplicate_entities(
-            candidate_entity_ids=task.payload.get("candidate_entity_ids", []),
-            suggested_canonical_name=task.payload.get("suggested_canonical_name", ""),
-        )
+        "task_status": SelfHealingTask.STATUS_RESOLVED,
+        "result": result,
     }
 
 
 def run_missing_definition_repair(state: RepairState) -> RepairState:
     task = state["task"]
     document = task.related_document
+    result = repair_missing_definition(
+        entity_id=task.payload["entity_id"],
+        llm_provider=document.llm_provider if document else None,
+        llm_model=document.llm_model if document else None,
+    )
     return {
-        "result": repair_missing_definition(
-            entity_id=task.payload["entity_id"],
-            llm_provider=document.llm_provider if document else None,
-            llm_model=document.llm_model if document else None,
-        )
+        "task_status": SelfHealingTask.STATUS_RESOLVED,
+        "result": result,
     }
 
 
 def run_low_confidence_answer_repair(state: RepairState) -> RepairState:
     task = state["task"]
-    return {
-        "result": repair_low_confidence_answer(
-            question=task.payload["question"],
-            brain_id=task.brain_id,
-            answer=task.payload.get("answer", ""),
-            knowledge_gaps=task.payload.get("knowledge_gaps", []),
-            confidence_score=float(task.payload.get("confidence_score", 0.0) or 0.0),
-        )
-    }
+    result = repair_low_confidence_answer(
+        question=task.payload["question"],
+        brain_id=task.brain_id,
+        answer=task.payload.get("answer", ""),
+        knowledge_gaps=task.payload.get("knowledge_gaps", []),
+        confidence_score=float(task.payload.get("confidence_score", 0.0) or 0.0),
+    )
+    task_status = result.pop("task_status", SelfHealingTask.STATUS_UNRESOLVED)
+    return {"task_status": task_status, "result": result}
 
 
 def run_contradiction_review(state: RepairState) -> RepairState:
-    return {"result": review_contradiction(state["task"].payload)}
+    result = review_contradiction(state["task"].payload)
+    task_status = result.pop("task_status", SelfHealingTask.STATUS_REVIEW_REQUIRED)
+    return {"task_status": task_status, "result": result}
 
 
 def run_fallback(state: RepairState) -> RepairState:
-    return {"result": {"status": "ignored", "message": "No repair runner registered."}}
+    return {
+        "task_status": SelfHealingTask.STATUS_IGNORED,
+        "result": {"status": "ignored", "message": "No repair runner registered."},
+    }
 
 
 def finalize_task(state: RepairState) -> RepairState:
     task = state["task"]
     task.result = state.get("result", {})
-    task.status = SelfHealingTask.STATUS_COMPLETED
+    task.status = state.get("task_status", SelfHealingTask.STATUS_RESOLVED)
     task.completed_at = timezone.now()
     task.error_message = ""
     task.save(update_fields=["status", "result", "completed_at", "error_message", "updated_at"])
-    if task.task_type == SelfHealingTask.TYPE_MISSING_DEFINITION and task.related_entity_id:
+    if (
+        task.task_type == SelfHealingTask.TYPE_MISSING_DEFINITION
+        and task.related_entity_id
+        and task.status == SelfHealingTask.STATUS_RESOLVED
+    ):
         enrich_entity(task.related_entity)
-    elif task.task_type == SelfHealingTask.TYPE_DUPLICATE_ENTITY and task.brain_id:
+    elif (
+        task.task_type == SelfHealingTask.TYPE_DUPLICATE_ENTITY
+        and task.brain_id
+        and task.status == SelfHealingTask.STATUS_RESOLVED
+    ):
         enrich_entities_for_brain(task.brain_id)
     return {"task": task}
 

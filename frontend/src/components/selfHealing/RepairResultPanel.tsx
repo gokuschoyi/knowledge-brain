@@ -23,7 +23,13 @@ const statusConfig: Record<
 > = {
   pending: { palette: 'orange', label: 'Pending', accent: '#ea580c' },
   running: { palette: 'blue', label: 'Running', accent: '#3b82f6' },
-  completed: { palette: 'green', label: 'Completed', accent: '#22c55e' },
+  resolved: { palette: 'green', label: 'Resolved', accent: '#22c55e' },
+  unresolved: { palette: 'orange', label: 'Unresolved', accent: '#f59e0b' },
+  review_required: {
+    palette: 'purple',
+    label: 'Review Required',
+    accent: '#a855f7',
+  },
   failed: { palette: 'red', label: 'Failed', accent: '#ef4444' },
   ignored: { palette: 'gray', label: 'Ignored', accent: '#64748b' },
 };
@@ -341,7 +347,11 @@ export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
     : [];
 
   const hasResult = task.result && Object.keys(task.result).length > 0;
-  const isDone = task.status === 'completed' || task.status === 'failed';
+  const isDone =
+    task.status === 'resolved' ||
+    task.status === 'unresolved' ||
+    task.status === 'review_required' ||
+    task.status === 'failed';
 
   return (
     <Card
@@ -394,7 +404,7 @@ export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
           <MetaField label='Priority' value={String(task.priority)} />
           <MetaField label='Brain' value={task.brain_name || '—'} />
           <MetaField label='Created' value={createdAt} />
-          {completedAt && <MetaField label='Completed' value={completedAt} />}
+          {completedAt && <MetaField label='Finished' value={completedAt} />}
         </Grid>
 
         {/* ── Context chips ── */}
@@ -514,17 +524,32 @@ export function RepairResultPanel({ task }: { task: SelfHealingTask | null }) {
             <Box
               px='4'
               py='3'
-              bg={task.status === 'completed' ? 'green.900/20' : 'red.900/20'}
+              bg={
+                task.status === 'failed'
+                  ? 'red.900/20'
+                  : task.status === 'review_required'
+                    ? 'purple.900/20'
+                    : task.status === 'unresolved'
+                      ? 'orange.900/20'
+                      : 'green.900/20'
+              }
             >
               {summary.outcomeText && (
                 <Text
                   fontSize='sm'
                   fontWeight='semibold'
-                  color={task.status === 'completed' ? 'green.300' : 'red.300'}
+                  color={
+                    task.status === 'failed'
+                      ? 'red.300'
+                      : task.status === 'review_required'
+                        ? 'purple.300'
+                        : task.status === 'unresolved'
+                          ? 'orange.300'
+                          : 'green.300'
+                  }
                   mb={task.error_message || hasResult ? '2' : '0'}
                 >
-                  {task.status === 'completed' ? '✓' : '✗'}{' '}
-                  {summary.outcomeText}
+                  {task.status === 'failed' ? '✗' : '✓'} {summary.outcomeText}
                 </Text>
               )}
 

@@ -72,7 +72,7 @@ ELK was chosen over React Flow's built-in layout because it handles large, dense
 
 | Component | Purpose |
 |-----------|---------|
-| `IngestForm.tsx` | Tabs for three source types (text, file, URL). Handles file drag-and-drop. Includes model provider/model selector populated from `GET /api/models/`. |
+| `IngestForm.tsx` | Tabs for three source types (text, file, URL). Handles file drag-and-drop. Includes source authority, optional published date, and model provider/model selector populated from `GET /api/models/`. |
 | `IngestionProgress.tsx` | Connects to the SSE event stream for a job and renders a live stage-by-stage progress view. Shows per-chunk artifact status with pass/fail counts. |
 | `DocumentList.tsx` | Recent documents list shown below the upload form. Provides quick access to retry failed documents or navigate to detail. |
 
@@ -82,8 +82,9 @@ ELK was chosen over React Flow's built-in layout because it handles large, dense
 
 | Component | Purpose |
 |-----------|---------|
-| Task card (inline) | Compact summary: task type, status badge, related entity/document, creation date. Action buttons: Run, Ignore, Delete. |
-| Task detail panel | Full JSON inspection of `payload` (repair input) and `result` (repair output). Formatted for readability — not raw JSON. |
+| Task card (inline) | Compact summary: task type, outcome-aware status badge, related entity/document, creation date. Action buttons: Run, Add evidence, Ignore, Delete. |
+| Task detail panel | Full inspection of `payload` (repair input) and `result` (repair output). Highlights `resolved`, `unresolved`, and `review_required` outcomes rather than generic completion. |
+| `EvidenceUploadDialog.tsx` | Task-scoped evidence attachment flow that creates a normal ingestion job in the active brain from pasted text, file upload, or URL. |
 | Auto-repair config panel | Toggle and interval controls for the active brain's auto-repair settings. Submits via `PATCH /api/dashboard/brains/:id/`. |
 
 ---
