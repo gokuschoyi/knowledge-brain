@@ -47,6 +47,7 @@ class ChatSessionSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "title",
+            "summary",
             "created_at",
             "messages",
             "message_count",

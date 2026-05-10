@@ -25,6 +25,7 @@ def build_answer_prompt() -> ChatPromptTemplate:
             (
                 "human",
                 "Question: {question}\n\n"
+                "Session context:\n{session_context}\n\n"
                 "Answer mode: {answer_mode}\n\n"
                 "Top chunks:\n{chunk_context}\n\n"
                 "Top entity definitions:\n{entity_context}\n\n"
@@ -39,6 +40,7 @@ def build_answer_prompt() -> ChatPromptTemplate:
 
 def build_answer_prompt_inputs(
     question: str,
+    session_context: str,
     top_chunks: list,
     related_entities: list,
     relationships: list,
@@ -61,13 +63,13 @@ def build_answer_prompt_inputs(
         for rel in relationships[:8]
     )
     claim_context = "\n".join(
-        f"- {claim.text[:260]}"
-        + (" [conflicting evidence]" if claim.contradiction_flag else "")
+        f"- {claim.text[:260]}" + (" [conflicting evidence]" if claim.contradiction_flag else "")
         for claim in claims[:8]
     )
     contradiction_context = "\n".join(contradiction_warnings) or "None"
     return {
         "question": question,
+        "session_context": session_context or "None",
         "answer_mode": answer_mode,
         "chunk_context": chunk_context or "No chunks found.",
         "entity_context": entity_context or "No high-confidence entity definitions found.",
@@ -80,6 +82,7 @@ def build_answer_prompt_inputs(
 
 def build_fallback_answer_text(
     question: str,
+    session_context: str,
     top_chunks: list,
     related_entities: list,
     relationships: list,
@@ -90,6 +93,8 @@ def build_fallback_answer_text(
     answer_mode = infer_answer_mode(question)
     bullet_points = [chunk.summary or chunk.text[:180] for chunk in top_chunks[:4]]
     answer = "I've analyzed the knowledge brain context and found the following information:\n\n"
+    if session_context:
+        answer += f"Conversation context:\n- {session_context[:220]}\n\n"
     if answer_mode == "definition" and related_entities:
         answer += "\n".join(
             f"- **{entity.name}**: {(entity.description or 'No strong definition is available yet.')[:220]}"
@@ -157,6 +162,7 @@ def _coerce_stream_text(content) -> str:
 
 def stream_answer_text(
     question: str,
+    session_context: str,
     top_chunks: list,
     related_entities: list,
     relationships: list,
@@ -174,6 +180,7 @@ def stream_answer_text(
             for chunk in chain.stream(
                 build_answer_prompt_inputs(
                     question=question,
+                    session_context=session_context,
                     top_chunks=top_chunks,
                     related_entities=related_entities,
                     relationships=relationships,
@@ -191,6 +198,7 @@ def stream_answer_text(
 
     fallback_answer = build_fallback_answer_text(
         question,
+        session_context,
         top_chunks,
         related_entities,
         relationships,
@@ -199,11 +207,12 @@ def stream_answer_text(
         knowledge_gaps,
     )
     for start in range(0, len(fallback_answer), 120):
-        yield fallback_answer[start:start + 120]
+        yield fallback_answer[start : start + 120]
 
 
 def synthesize_answer_payload(
     question: str,
+    session_context: str,
     top_chunks: list,
     related_entities: list,
     relationships: list,
@@ -226,6 +235,7 @@ def synthesize_answer_payload(
                 schema=AnswerResponse,
                 payload=build_answer_prompt_inputs(
                     question=question,
+                    session_context=session_context,
                     top_chunks=top_chunks,
                     related_entities=related_entities,
                     relationships=relationships,
@@ -250,6 +260,7 @@ def synthesize_answer_payload(
     return build_answer_payload(
         answer_text=build_fallback_answer_text(
             question,
+            session_context,
             top_chunks,
             related_entities,
             relationships,
