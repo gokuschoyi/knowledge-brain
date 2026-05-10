@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from apps.documents.serializers import DocumentIngestSerializer
 from apps.self_healing.models import SelfHealingTask
 
 
@@ -29,10 +30,25 @@ class SelfHealingTaskSerializer(serializers.ModelSerializer):
         return obj.task_type.replace("_", " ")
 
     def get_can_run(self, obj):
-        return obj.status not in {
-            SelfHealingTask.STATUS_RUNNING,
-            SelfHealingTask.STATUS_COMPLETED,
-        } and obj.task_type != SelfHealingTask.TYPE_ORPHAN_CHUNK
+        return (
+            obj.status
+            not in {
+                SelfHealingTask.STATUS_RUNNING,
+                SelfHealingTask.STATUS_RESOLVED,
+                SelfHealingTask.STATUS_UNRESOLVED,
+                SelfHealingTask.STATUS_REVIEW_REQUIRED,
+                SelfHealingTask.STATUS_FAILED,
+                SelfHealingTask.STATUS_IGNORED,
+            }
+            and obj.task_type != SelfHealingTask.TYPE_ORPHAN_CHUNK
+        )
 
     def get_can_delete(self, obj):
         return obj.status == SelfHealingTask.STATUS_PENDING
+
+
+class SelfHealingEvidenceSerializer(DocumentIngestSerializer):
+    rerun_task = serializers.BooleanField(required=False, default=False)
+
+    class Meta(DocumentIngestSerializer.Meta):
+        fields = DocumentIngestSerializer.Meta.fields + ["rerun_task"]

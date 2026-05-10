@@ -7,6 +7,7 @@ export function TaskList({
   selectedTaskId,
   onSelect,
   onRun,
+  onAddEvidence,
   onIgnore,
   onDelete,
 }: {
@@ -14,6 +15,7 @@ export function TaskList({
   selectedTaskId: number | null;
   onSelect: (id: number) => void;
   onRun: (id: number) => Promise<void>;
+  onAddEvidence: (task: SelfHealingTask) => void;
   onIgnore: (id: number) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
 }) {
@@ -27,6 +29,7 @@ export function TaskList({
             isSelected={task.id === selectedTaskId}
             onSelect={onSelect}
             onRun={onRun}
+            onAddEvidence={onAddEvidence}
             onIgnore={onIgnore}
             onDelete={onDelete}
           />

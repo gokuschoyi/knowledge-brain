@@ -14,7 +14,9 @@ class SelfHealingTask(models.Model):
 
     STATUS_PENDING = "pending"
     STATUS_RUNNING = "running"
-    STATUS_COMPLETED = "completed"
+    STATUS_RESOLVED = "resolved"
+    STATUS_UNRESOLVED = "unresolved"
+    STATUS_REVIEW_REQUIRED = "review_required"
     STATUS_FAILED = "failed"
     STATUS_IGNORED = "ignored"
 

@@ -7,7 +7,7 @@ import {
   HStack,
   Stack,
 } from '@chakra-ui/react';
-import { Trash2 } from 'lucide-react';
+import { Paperclip, Trash2 } from 'lucide-react';
 import type { SelfHealingTask } from '../../api/types';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
@@ -19,6 +19,7 @@ export function TaskCard({
   isSelected,
   onSelect,
   onRun,
+  onAddEvidence,
   onIgnore,
   onDelete,
 }: {
@@ -26,19 +27,24 @@ export function TaskCard({
   isSelected: boolean;
   onSelect: (id: number) => void;
   onRun: (id: number) => Promise<void>;
+  onAddEvidence: (task: SelfHealingTask) => void;
   onIgnore: (id: number) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
 }) {
   const statusPalette =
-    task.status === 'completed'
+    task.status === 'resolved'
       ? 'green'
-      : task.status === 'pending'
+      : task.status === 'unresolved'
         ? 'orange'
-        : task.status === 'running'
-          ? 'blue'
-          : task.status === 'failed'
-            ? 'red'
-            : 'gray';
+        : task.status === 'review_required'
+          ? 'purple'
+          : task.status === 'pending'
+            ? 'orange'
+            : task.status === 'running'
+              ? 'blue'
+              : task.status === 'failed'
+                ? 'red'
+                : 'gray';
   const summary = getTaskCardSummary(task);
   const impactPalette: Record<RepairImpactKind, string> = {
     graph_structure: 'cyan',
@@ -134,11 +140,13 @@ export function TaskCard({
             color={
               task.status === 'failed'
                 ? 'red.300'
-                : task.status === 'completed'
+                : task.status === 'resolved'
                   ? 'green.300'
-                  : task.status === 'ignored'
-                    ? 'slate.500'
-                    : 'slate.500'
+                  : task.status === 'review_required'
+                    ? 'purple.300'
+                    : task.status === 'ignored'
+                      ? 'slate.500'
+                      : 'slate.500'
             }
           >
             {summary.outcomeText}
@@ -158,6 +166,20 @@ export function TaskCard({
         >
           {summary.runButtonLabel}
         </Button>
+        {(task.task_type === 'low_confidence_answer' ||
+          task.task_type === 'contradiction') && (
+          <Button
+            size='sm'
+            variant='outline'
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddEvidence(task);
+            }}
+          >
+            <Paperclip size={14} />
+            Add evidence
+          </Button>
+        )}
         <Button
           size='sm'
           variant='outline'
