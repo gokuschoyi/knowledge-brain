@@ -1,5 +1,6 @@
 import { apiFetch } from './client';
 import type {
+  BatchJobResponse,
   Chunk,
   DocumentEntity,
   DocumentIngestResponse,
@@ -11,8 +12,11 @@ import type {
 export type Document = DocumentSummary;
 export type { IngestionJob };
 
-export function listDocuments(brainId?: string) {
-  const search = brainId ? `?brain_id=${encodeURIComponent(brainId)}` : '';
+export function listDocuments(brainId?: string, entityId?: number | null) {
+  const params = new URLSearchParams();
+  if (brainId) params.set('brain_id', brainId);
+  if (entityId) params.set('entity_id', String(entityId));
+  const search = params.size ? `?${params.toString()}` : '';
   return apiFetch<Document[]>(`/documents/${search}`);
 }
 
@@ -43,6 +47,10 @@ export async function ingestDocument(
 
 export function getIngestionJob(id: number) {
   return apiFetch<IngestionJob>(`/ingestion/jobs/${id}/`);
+}
+
+export function getBatchIngestionJobs(ids: number[]) {
+  return apiFetch<BatchJobResponse>(`/ingestion/jobs/batch/?ids=${ids.join(',')}`);
 }
 
 export function retryDocument(id: string | number) {

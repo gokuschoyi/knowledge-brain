@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Collapsible,
@@ -46,7 +46,7 @@ export function IngestForm({
   onToggleCollapse,
   modelCatalog,
 }: {
-  onSubmit: (payload: FormData) => Promise<DocumentIngestResponse>;
+  onSubmit: (payload: FormData[]) => Promise<void>;
   loading: boolean;
   ingestionActive: boolean;
   activeBrainId: string;
@@ -59,39 +59,62 @@ export function IngestForm({
   const [sourceType, setSourceType] = useState('file');
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [provider, setProvider] = useState(defaultProvider);
   const [model, setModel] = useState(defaultModel);
+  const [sourceAuthority, setSourceAuthority] = useState('primary');
+  const [sourcePublishedAt, setSourcePublishedAt] = useState('');
+
+  useEffect(() => {
+    if (files.length === 1 && !title) {
+      setTitle(files[0].name.replace(/\.[^.]+$/, ''));
+    }
+  }, [files]);
 
   const handleReset = () => {
     setTitle('');
     setSourceType('file');
     setUrl('');
-    setFile(null);
+    setFiles([]);
     setProvider(defaultProvider);
     setModel(defaultModel);
+    setSourceAuthority('primary');
+    setSourcePublishedAt('');
   };
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!activeBrainId || !provider || !model) return;
 
-    const formData = new FormData();
-    formData.append('brain', activeBrainId);
-    formData.append('title', title);
-    formData.append('source_type', sourceType);
-    formData.append('llm_provider', provider);
-    formData.append('llm_model', model);
+    const buildBase = (fileTitle: string) => {
+      const fd = new FormData();
+      fd.append('brain', activeBrainId);
+      fd.append('title', fileTitle);
+      fd.append('source_type', sourceType);
+      fd.append('llm_provider', provider);
+      fd.append('llm_model', model);
+      fd.append('source_authority', sourceAuthority);
+      if (sourcePublishedAt) {
+        fd.append('source_published_at', new Date(sourcePublishedAt).toISOString());
+      }
+      return fd;
+    };
 
-    if (sourceType === 'file' && file) {
-      formData.append('raw_file', file);
-    } else if (sourceType === 'url' && url) {
-      formData.append('url', url);
-    } else if (sourceType === 'text' && url) {
-      formData.append('raw_text', url);
+    let formDataList: FormData[];
+    if (sourceType === 'file' && files.length > 0) {
+      formDataList = files.map((f) => {
+        const fd = buildBase(files.length === 1 ? title : f.name.replace(/\.[^.]+$/, ''));
+        fd.append('raw_file', f);
+        return fd;
+      });
+    } else {
+      const fd = buildBase(title);
+      if (sourceType === 'url' && url) fd.append('url', url);
+      else if (sourceType === 'text' && url) fd.append('raw_text', url);
+      formDataList = [fd];
     }
 
-    await onSubmit(formData);
+    await onSubmit(formDataList);
     handleReset();
   }
 
@@ -285,18 +308,68 @@ export function IngestForm({
                       })}
                     </Field.Root>
                   </Stack>
+
+                  <Stack
+                    direction={{ base: 'column', md: 'row' }}
+                    gap='4'
+                    mt='4'
+                  >
+                    <Field.Root flex='1'>
+                      <Field.Label color='fgMuted'>
+                        Source authority
+                      </Field.Label>
+                      {renderSelect({
+                        collection: createListCollection({
+                          items: [
+                            { label: 'User Provided', value: 'user_provided' },
+                            { label: 'Secondary Source', value: 'secondary' },
+                            { label: 'Primary Source', value: 'primary' },
+                            { label: 'Unknown', value: 'unknown' },
+                          ],
+                        }),
+                        value: sourceAuthority,
+                        onValueChange: setSourceAuthority,
+                        placeholder: 'Select authority',
+                      })}
+                    </Field.Root>
+
+                    <Field.Root flex='1'>
+                      <Field.Label color='fgMuted'>Published date</Field.Label>
+                      <Input
+                        type='date'
+                        value={sourcePublishedAt}
+                        onChange={(event) =>
+                          setSourcePublishedAt(event.target.value)
+                        }
+                        bg='slate.950'
+                        border='1px solid'
+                        borderColor='glassBorder'
+                        borderRadius='lg'
+                        px='3'
+                        py='2.5'
+                        minH='11'
+                        color='white'
+                      />
+                    </Field.Root>
+                  </Stack>
                 </Box>
 
-                <Field.Root invalid={!title}>
-                  <Field.Label color='slate.300'>Document Title</Field.Label>
-                  <Input
-                    placeholder='e.g. Q4 Financial Report'
-                    bg='slate.950'
-                    borderColor='glassBorder'
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                  />
-                </Field.Root>
+                {(sourceType !== 'file' || files.length <= 1) && (
+                  <Field.Root invalid={sourceType !== 'file' && !title}>
+                    <Field.Label color='slate.300'>Document Title</Field.Label>
+                    <Input
+                      placeholder={
+                        sourceType === 'file' && files.length === 1
+                          ? 'Auto-filled from filename'
+                          : 'e.g. Q4 Financial Report'
+                      }
+                      bg='slate.950'
+                      borderColor='glassBorder'
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                    />
+                  </Field.Root>
+                )}
 
                 <Field.Root>
                   <Field.Label color='slate.300'>Source Type</Field.Label>
@@ -329,14 +402,15 @@ export function IngestForm({
                     onChange={(e) => setUrl(e.target.value)}
                   />
                 ) : (
-                  <Field.Root invalid={!file} w='full'>
-                    <Field.Label color='slate.300'>File</Field.Label>
+                  <Field.Root invalid={files.length === 0} w='full'>
+                    <Field.Label color='slate.300'>
+                      {files.length > 1 ? `Files (${files.length} selected)` : 'File'}
+                    </Field.Label>
                     <FileUpload.Root
-                      maxFiles={1}
-                      acceptedFiles={file ? [file] : []}
-                      onFileChange={(details) =>
-                        setFile(details.acceptedFiles[0] ?? null)
-                      }
+                      maxFiles={10}
+                      accept='.pdf,.txt,.md,.docx,.xlsx,.csv,.pptx'
+                      acceptedFiles={files}
+                      onFileChange={(details) => setFiles(details.acceptedFiles)}
                       w='full'
                     >
                       <FileUpload.HiddenInput />
@@ -358,8 +432,8 @@ export function IngestForm({
                             Drop a document or browse locally
                           </Text>
                           <Text fontSize='sm' color='fgMuted'>
-                            PDF, text, and source files are supported by the
-                            ingestion pipeline.
+                            PDF, Word, Excel, CSV, PowerPoint, and text files
+                            supported. Drop multiple files at once.
                           </Text>
                         </FileUpload.DropzoneContent>
                       </FileUpload.Dropzone>
@@ -417,12 +491,12 @@ export function IngestForm({
                     loading={loading}
                     disabled={
                       !activeBrainId ||
-                      !title ||
                       !provider ||
                       !model ||
-                      (sourceType === 'file' && !file) ||
-                      ((sourceType === 'url' || sourceType === 'text') &&
-                        !url) ||
+                      (sourceType === 'file' && files.length === 0) ||
+                      (sourceType === 'file' && files.length === 1 && !title) ||
+                      ((sourceType === 'url' || sourceType === 'text') && !title) ||
+                      ((sourceType === 'url' || sourceType === 'text') && !url) ||
                       ingestionActive
                     }
                   >

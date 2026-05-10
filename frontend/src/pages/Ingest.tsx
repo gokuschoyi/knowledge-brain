@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Box, Grid, Heading, Stack, Text, VStack } from '@chakra-ui/react';
 
 import {
-  getIngestionJob,
+  getBatchIngestionJobs,
   ingestDocument,
   listDocuments,
   retryChunk,
 } from '../api/documents';
 import { getBrains } from '../api/brains';
 import { getModelCatalog } from '../api/models';
-import type { IngestionJob } from '../api/types';
+import type { BatchJobResponse } from '../api/types';
 import { DocumentList } from '../components/ingest/DocumentList';
 import { IngestForm } from '../components/ingest/IngestForm';
-import { IngestionProgress } from '../components/ingest/IngestionProgress';
+import { BatchIngestionProgress } from '../components/ingest/BatchIngestionProgress';
 import { Card } from '../components/common/Card';
 import { LoadingState } from '../components/common/LoadingState';
 import { useActiveBrain } from '../context/useActiveBrain';
@@ -21,10 +21,12 @@ import { useActiveBrain } from '../context/useActiveBrain';
 export function IngestPage() {
   const { activeBrainId } = useActiveBrain();
   const queryClient = useQueryClient();
-  const [jobId, setJobId] = useState<number | null>(null);
-  const [job, setJob] = useState<IngestionJob | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [jobIds, setJobIds] = useState<number[]>([]);
+  const [batchStatus, setBatchStatus] = useState<BatchJobResponse | null>(null);
   const [retryVersion, setRetryVersion] = useState(0);
   const [isFormManuallyCollapsed, setIsFormManuallyCollapsed] = useState(false);
+
   const documentsQuery = useQuery({
     queryKey: ['documents', activeBrainId],
     queryFn: () => listDocuments(activeBrainId || undefined),
@@ -34,39 +36,45 @@ export function IngestPage() {
     queryKey: ['model-catalog'],
     queryFn: getModelCatalog,
   });
-  const ingestMutation = useMutation({
-    mutationFn: ingestDocument,
-    onSuccess: (data) => {
-      setJobId(data.job_id);
-      queryClient.invalidateQueries({ queryKey: ['documents'] });
-    },
-  });
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobIds.length) return;
     const interval = window.setInterval(async () => {
-      const nextJob = await getIngestionJob(jobId);
-      setJob(nextJob);
-      if (nextJob.status === 'completed' || nextJob.status === 'failed') {
+      const batch = await getBatchIngestionJobs(jobIds);
+      setBatchStatus(batch);
+      if (batch.summary.all_terminal) {
         queryClient.invalidateQueries({ queryKey: ['documents'] });
         window.clearInterval(interval);
       }
     }, 5000);
     return () => window.clearInterval(interval);
-  }, [jobId, queryClient, retryVersion]);
+  }, [jobIds, queryClient, retryVersion]);
 
-  const handleRetryChunk = async (chunkId: number) => {
-    if (!job || !jobId) return;
-    await retryChunk(job.document, chunkId);
-    const updated = await getIngestionJob(jobId);
-    setJob(updated);
-    setRetryVersion((v) => v + 1);
+  const handleSubmit = async (formDataList: FormData[]) => {
+    setIsSubmitting(true);
+    setBatchStatus(null);
+    try {
+      const results = await Promise.all(formDataList.map((fd) => ingestDocument(fd)));
+      const ids = results.map((r) => r.job_id);
+      setJobIds(ids);
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRetryChunk = async (documentId: number, chunkId: number) => {
+    await retryChunk(documentId, chunkId);
+    if (jobIds.length) {
+      const batch = await getBatchIngestionJobs(jobIds);
+      setBatchStatus(batch);
+      setRetryVersion((v) => v + 1);
+    }
   };
 
   const ingestionActive =
-    ingestMutation.isPending ||
-    job?.status === 'pending' ||
-    job?.status === 'processing' ||
+    isSubmitting ||
+    (batchStatus !== null && !batchStatus.summary.all_terminal) ||
     (documentsQuery.data?.some(
       (document) =>
         document.status === 'pending' || document.status === 'processing',
@@ -125,10 +133,8 @@ export function IngestPage() {
           gap={6}
         >
           <IngestForm
-            onSubmit={async (payload) => {
-              return ingestMutation.mutateAsync(payload);
-            }}
-            loading={ingestMutation.isPending}
+            onSubmit={handleSubmit}
+            loading={isSubmitting}
             ingestionActive={ingestionActive}
             activeBrainId={activeBrain.id}
             collapsed={isFormCollapsed}
@@ -137,8 +143,8 @@ export function IngestPage() {
             }
             modelCatalog={modelCatalogQuery.data}
           />
-          <IngestionProgress
-            job={job}
+          <BatchIngestionProgress
+            batchStatus={batchStatus}
             onRetryChunk={handleRetryChunk}
             fillAvailableSpace={isFormCollapsed}
           />
