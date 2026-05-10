@@ -4,6 +4,9 @@ from apps.core.models import Brain
 
 
 class QueryRepairMemory(models.Model):
+    STATUS_RESOLVED = "resolved"
+    STATUS_UNRESOLVED = "unresolved"
+
     brain = models.ForeignKey(
         Brain,
         null=True,
@@ -17,7 +20,7 @@ class QueryRepairMemory(models.Model):
     related_entity_ids = models.JSONField(default=list, blank=True)
     knowledge_gaps = models.JSONField(default=list, blank=True)
     last_answer_confidence = models.FloatField(default=0)
-    status = models.CharField(max_length=50, default="improved")
+    status = models.CharField(max_length=50, default=STATUS_RESOLVED)
     times_applied = models.PositiveIntegerField(default=0)
     last_repaired_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -39,16 +39,21 @@ class Claim(models.Model):
     VERIFIED_UNVERIFIED = "unverified"
     REVIEW_CLEAR = "clear"
     REVIEW_CONTRADICTION = "contradiction"
+    REVIEW_ACTIVE = "active"
+    REVIEW_SUPERSEDED = "superseded"
+    REVIEW_AUTHORITATIVE = "authoritative"
+    REVIEW_NEEDS_REVIEW = "needs_review"
 
     text = models.TextField()
     source_chunk = models.ForeignKey(Chunk, on_delete=models.CASCADE, related_name="claims")
-    subject_entity = models.ForeignKey(
-        Entity, null=True, blank=True, on_delete=models.SET_NULL, related_name="claims"
-    )
+    subject_entity = models.ForeignKey(Entity, null=True, blank=True, on_delete=models.SET_NULL, related_name="claims")
     confidence = models.FloatField(default=0)
     verified_status = models.CharField(max_length=50, default=VERIFIED_UNVERIFIED)
     contradiction_flag = models.BooleanField(default=False)
-    contradiction_review_state = models.CharField(max_length=50, default=REVIEW_CLEAR)
+    contradiction_review_state = models.CharField(
+        max_length=50,
+        default=REVIEW_ACTIVE,
+    )
     subject_key = models.CharField(max_length=255, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -75,6 +80,7 @@ class Relationship(models.Model):
 class ChatSession(models.Model):
     brain = models.ForeignKey(Brain, on_delete=models.CASCADE, related_name="chat_sessions", null=True)
     title = models.CharField(max_length=255, blank=True)
+    summary = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -4,6 +4,17 @@ from apps.core.models import Brain
 
 
 class Document(models.Model):
+    AUTHORITY_UNKNOWN = "unknown"
+    AUTHORITY_USER = "user_provided"
+    AUTHORITY_SECONDARY = "secondary"
+    AUTHORITY_PRIMARY = "primary"
+    AUTHORITY_CHOICES = [
+        (AUTHORITY_UNKNOWN, "Unknown"),
+        (AUTHORITY_USER, "User Provided"),
+        (AUTHORITY_SECONDARY, "Secondary Source"),
+        (AUTHORITY_PRIMARY, "Primary Source"),
+    ]
+
     STATUS_PENDING = "pending"
     STATUS_PROCESSING = "processing"
     STATUS_COMPLETED = "completed"
@@ -30,6 +41,13 @@ class Document(models.Model):
     raw_text = models.TextField(blank=True)
     raw_file = models.FileField(upload_to="documents/", null=True, blank=True)
     url = models.URLField(blank=True)
+    source_authority = models.CharField(
+        max_length=50,
+        choices=AUTHORITY_CHOICES,
+        default=AUTHORITY_UNKNOWN,
+    )
+    source_published_at = models.DateTimeField(null=True, blank=True)
+    source_observed_at = models.DateTimeField(null=True, blank=True)
     tags = models.JSONField(default=list, blank=True)
     llm_provider = models.CharField(max_length=50, blank=True, default="")
     llm_model = models.CharField(max_length=100, blank=True, default="")

@@ -87,6 +87,57 @@ def _extract_pdf_text(document: Document) -> str:
     return ocr_text
 
 
+def _extract_docx_text(file_bytes: bytes) -> str:
+    from docx import Document as DocxDocument
+    doc = DocxDocument(io.BytesIO(file_bytes))
+    parts = [p.text for p in doc.paragraphs if p.text.strip()]
+    for table in doc.tables:
+        for row in table.rows:
+            cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+            if cells:
+                parts.append(" | ".join(cells))
+    return "\n".join(parts)
+
+
+def _extract_xlsx_text(file_bytes: bytes) -> str:
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    parts = []
+    for sheet in wb.worksheets:
+        parts.append(f"[Sheet: {sheet.title}]")
+        for row in sheet.iter_rows(values_only=True):
+            cells = [str(c) for c in row if c is not None]
+            if cells:
+                parts.append(" | ".join(cells))
+    return "\n".join(parts)
+
+
+def _extract_csv_text(file_bytes: bytes) -> str:
+    import csv
+    text = file_bytes.decode("utf-8", errors="ignore")
+    return "\n".join(
+        " | ".join(row) for row in csv.reader(io.StringIO(text)) if any(row)
+    )
+
+
+def _extract_pptx_text(file_bytes: bytes) -> str:
+    from pptx import Presentation
+    prs = Presentation(io.BytesIO(file_bytes))
+    parts = []
+    for i, slide in enumerate(prs.slides, 1):
+        parts.append(f"[Slide {i}]")
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    if para.text.strip():
+                        parts.append(para.text.strip())
+        if slide.has_notes_slide:
+            notes = slide.notes_slide.notes_text_frame.text.strip()
+            if notes:
+                parts.append(f"[Notes] {notes}")
+    return "\n".join(parts)
+
+
 def extract_text(document: Document) -> str:
     if document.source_type == Document.SOURCE_TEXT:
         return document.raw_text
@@ -103,4 +154,14 @@ def extract_text(document: Document) -> str:
                     return text_handle.read().strip()
         if suffix == ".pdf":
             return _extract_pdf_text(document)
+        with document.raw_file.open("rb") as handle:
+            file_bytes = handle.read()
+        if suffix == ".docx":
+            return _extract_docx_text(file_bytes)
+        if suffix == ".xlsx":
+            return _extract_xlsx_text(file_bytes)
+        if suffix == ".csv":
+            return _extract_csv_text(file_bytes)
+        if suffix == ".pptx":
+            return _extract_pptx_text(file_bytes)
     return ""

@@ -7,12 +7,21 @@ export type JsonValue =
 export type DocumentStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 export type DocumentSourceType = 'text' | 'file' | 'url';
+export type DocumentSourceAuthority =
+  | 'unknown'
+  | 'user_provided'
+  | 'secondary'
+  | 'primary';
 
 export type DocumentSummary = {
   id: number;
   title: string;
   source_type: DocumentSourceType;
   source_label?: string;
+  source_authority: DocumentSourceAuthority;
+  source_authority_label?: string;
+  source_published_at?: string | null;
+  source_observed_at?: string | null;
   tags: string[];
   llm_provider: string;
   llm_model: string;
@@ -75,6 +84,7 @@ export type IngestionChunkDetail = {
 export type IngestionJob = {
   id: number;
   document: number;
+  document_title: string;
   status: DocumentStatus;
   current_step: string;
   progress: number;
@@ -205,6 +215,7 @@ export type ChatMessage = {
 export type ChatSession = {
   id: number;
   title: string;
+  summary: string;
   created_at: string;
   last_message_at?: string;
   message_count?: number;
@@ -246,7 +257,9 @@ export type PartitionedGraphResponse = {
 export type SelfHealingTaskStatus =
   | 'pending'
   | 'running'
-  | 'completed'
+  | 'resolved'
+  | 'unresolved'
+  | 'review_required'
   | 'failed'
   | 'ignored';
 
@@ -285,8 +298,32 @@ export type SelfHealingRunAllResponse = {
   queued_task_ids: number[];
 };
 
+export type SelfHealingAttachEvidenceResponse = {
+  document_id: number;
+  job_id: number;
+  status: DocumentStatus;
+  task_id: number;
+  rerun_task_recommended: boolean;
+  next_action?: string;
+};
+
 export type DocumentIngestResponse = {
   document_id: number;
   job_id: number;
   status: DocumentStatus;
+};
+
+export type BatchJobSummary = {
+  total: number;
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  overall_progress: number;
+  all_terminal: boolean;
+};
+
+export type BatchJobResponse = {
+  jobs: IngestionJob[];
+  summary: BatchJobSummary;
 };
