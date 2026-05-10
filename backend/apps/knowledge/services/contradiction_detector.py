@@ -61,6 +61,7 @@ def detect_contradictions_for_document(document: Document) -> list[SelfHealingTa
                 priority=3,
                 title=f"Contradiction detected for {key}",
                 description="Conflicting values were found across related claims and documents.",
+                brain=document.brain,
                 related_document=document,
                 payload={
                     "claim_ids": claim_ids,
