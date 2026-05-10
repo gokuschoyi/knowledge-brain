@@ -4,7 +4,7 @@ from collections.abc import Iterator
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from apps.agents.llm import get_chat_model
+from apps.agents.llm import get_chat_model, invoke_structured_output
 from apps.agents.prompts import ANSWER_PROMPT
 from apps.agents.schemas import AnswerResponse
 
@@ -221,9 +221,10 @@ def synthesize_answer_payload(
     if model is not None:
         prompt = build_answer_prompt()
         try:
-            chain = prompt | model.with_structured_output(AnswerResponse)
-            response = chain.invoke(
-                build_answer_prompt_inputs(
+            response = invoke_structured_output(
+                prompt=prompt,
+                schema=AnswerResponse,
+                payload=build_answer_prompt_inputs(
                     question=question,
                     top_chunks=top_chunks,
                     related_entities=related_entities,
@@ -231,8 +232,13 @@ def synthesize_answer_payload(
                     claims=claims,
                     contradiction_warnings=contradiction_warnings,
                     knowledge_gaps=knowledge_gaps,
-                )
+                ),
+                llm_provider=llm_provider,
+                llm_model=llm_model,
+                operation="answer_synthesis",
             )
+            if response is None:
+                raise ValueError("Answer synthesis returned no structured response.")
             payload = response.model_dump()
             payload["answer"] = payload["answer"].replace("\\n", "\n").replace("\\t", "\t")
             payload["source_chunk_ids"] = payload.get("source_chunk_ids") or source_chunk_ids

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from apps.agents.llm import get_chat_model
+from apps.agents.llm import get_chat_model, invoke_structured_output
 from apps.agents.prompts import MISSING_DEFINITION_PROMPT
 from apps.agents.schemas import MissingDefinitionResponse
 from apps.knowledge.models import Entity
@@ -31,14 +31,20 @@ def repair_missing_definition(
             ]
         )
         try:
-            chain = prompt | model.with_structured_output(MissingDefinitionResponse)
-            response = chain.invoke(
-                {
+            response = invoke_structured_output(
+                prompt=prompt,
+                schema=MissingDefinitionResponse,
+                payload={
                     "entity_name": entity.name,
                     "current_description": entity.description,
                     "evidence_text": evidence_text,
-                }
+                },
+                llm_provider=llm_provider,
+                llm_model=llm_model,
+                operation="missing_definition_repair",
             )
+            if response is None:
+                raise ValueError("Missing definition repair returned no structured response.")
             description = response.definition
             evidence_chunk_ids = response.evidence_chunk_ids or evidence_chunk_ids
             entity.confidence = max(entity.confidence, response.confidence)

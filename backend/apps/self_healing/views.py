@@ -5,7 +5,6 @@ from rest_framework.views import APIView
 
 from apps.self_healing.models import SelfHealingTask
 from apps.self_healing.serializers import SelfHealingTaskSerializer
-from apps.self_healing.services.repair_runner import run_task
 from apps.self_healing.tasks import run_self_healing_task
 
 

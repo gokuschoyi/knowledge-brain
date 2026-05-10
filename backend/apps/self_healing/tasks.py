@@ -1,12 +1,12 @@
 from celery import shared_task
 
+from apps.agents.self_healing_agent import run_task
 from apps.self_healing.services.auto_repair import (
     queue_brain_auto_repairs,
     queue_enabled_auto_repairs,
     run_brain_retrieval_enrichment,
 )
 from apps.self_healing.models import SelfHealingTask
-from apps.self_healing.services.repair_runner import run_task
 
 
 @shared_task
