@@ -94,6 +94,14 @@ class ChunkExtractionArtifact(models.Model):
         (STATUS_COMPLETED, "Completed"),
         (STATUS_FAILED, "Failed"),
     ]
+    EMPTY_CHECK_NOT_NEEDED = "not_needed"
+    EMPTY_CHECK_VERIFIED_EMPTY = "verified_empty"
+    EMPTY_CHECK_RETRY_RECOMMENDED = "retry_recommended"
+    EMPTY_CHECK_CHOICES = [
+        (EMPTY_CHECK_NOT_NEEDED, "Not needed"),
+        (EMPTY_CHECK_VERIFIED_EMPTY, "Verified empty"),
+        (EMPTY_CHECK_RETRY_RECOMMENDED, "Retry recommended"),
+    ]
 
     ingestion_job = models.ForeignKey(
         IngestionJob,
@@ -113,6 +121,12 @@ class ChunkExtractionArtifact(models.Model):
     status = models.CharField(max_length=50, choices=STATUS_CHOICES, default=STATUS_PENDING)
     payload = models.JSONField(default=dict, blank=True)
     error_message = models.TextField(blank=True)
+    empty_verification_status = models.CharField(
+        max_length=50,
+        choices=EMPTY_CHECK_CHOICES,
+        default=EMPTY_CHECK_NOT_NEEDED,
+    )
+    empty_verification_message = models.TextField(blank=True)
     attempt_count = models.PositiveIntegerField(default=0)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
