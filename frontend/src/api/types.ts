@@ -65,6 +65,11 @@ export type IngestionChunkDetail = {
   status: 'pending' | 'queued' | 'running' | 'completed' | 'failed';
   attempt_count: number;
   error_message: string;
+  empty_verification_status?:
+    | 'not_needed'
+    | 'verified_empty'
+    | 'retry_recommended';
+  empty_verification_message?: string;
 };
 
 export type IngestionJob = {
@@ -103,6 +108,9 @@ export type Chunk = {
   extraction_status: ChunkExtractionStatus;
   entity_count: number;
   relationship_count: number;
+  claim_count: number;
+  verified_empty: boolean;
+  verification_message: string;
 };
 
 export type Entity = {

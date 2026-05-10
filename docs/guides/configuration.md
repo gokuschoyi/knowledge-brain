@@ -60,9 +60,8 @@ These control which ports the services bind to and which ports are exposed on th
 
 | Variable | Required | Default | Notes |
 |----------|----------|---------|-------|
-| `EXTRACTION_VERSION` | Yes | — | `V2` (recommended) or `V1` (legacy). Controls which ingestion pipeline is used. |
-| `INGESTION_V2_CHUNK_QUEUE` | Yes for V2 | `ingestion` | Dedicated Celery queue name for parallel chunk extraction tasks |
-| `INGESTION_V2_MAX_PARALLEL_CHUNK_TASKS` | Yes for V2 | `4` | Celery worker concurrency for the ingestion queue. Higher values speed up extraction but require more memory and LLM API capacity. |
+| `INGESTION_V2_CHUNK_QUEUE` | Yes | `ingestion_chunk_extraction` | Dedicated Celery queue name for parallel chunk extraction tasks |
+| `INGESTION_V2_MAX_PARALLEL_CHUNK_TASKS` | Yes | `5` | Celery worker concurrency for the ingestion queue. Higher values speed up extraction but require more memory and LLM API capacity. |
 | `MAX_UPLOAD_MB` | No | `50` | Maximum file upload size in megabytes |
 
 ---

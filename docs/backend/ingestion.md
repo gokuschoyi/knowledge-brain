@@ -1,24 +1,10 @@
 # Ingestion Pipeline
 
-This document covers how documents move from raw upload to structured, searchable knowledge. The active path is **V2**, controlled by the `EXTRACTION_VERSION` environment variable.
+This document covers how documents move from raw upload to structured, searchable knowledge. Knowledge Brain uses a single queue-based ingestion pipeline coordinated by `backend/apps/documents/services/parallel_ingestion_v2.py`.
 
 ---
 
-## V1 vs V2
-
-| | V1 | V2 |
-|--|----|----|
-| Orchestration | LangGraph agent in `agents/ingestion_agent.py` | Direct service pipeline in `documents/services/parallel_ingestion_v2.py` |
-| Extraction | Sequential, one stage at a time | Parallel: one Celery task per chunk |
-| Intermediate storage | Direct DB writes per chunk | `ChunkExtractionArtifact` buffers each chunk's result |
-| Persistence | Per-chunk, may produce duplicate entities | Consolidated once per document — no duplicates |
-| Status | Legacy, still functional | Active, recommended |
-
-V2 is faster (parallel LLM calls) and produces cleaner knowledge (document-scoped consolidation).
-
----
-
-## V2 Pipeline — Step by Step
+## Pipeline — Step by Step
 
 The pipeline is coordinated by `backend/apps/documents/services/parallel_ingestion_v2.py` and runs as a Celery task (`run_document_ingestion`).
 

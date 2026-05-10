@@ -24,7 +24,6 @@ Standard RAG chunks text and retrieves by similarity. Knowledge Brain goes furth
 | TypeScript | 5.6 | Type safety |
 | Vite | 5.4 | Build tool and dev server |
 | Chakra UI | 3.35 | Component library |
-| Tailwind CSS | — | Utility styling |
 | React Router | 6.27 | Client-side routing |
 | TanStack React Query | 5.59 | Server state, caching, background refetch |
 | React Flow | 11.11 | Knowledge graph canvas |
@@ -70,9 +69,9 @@ Standard RAG chunks text and retrieves by similarity. Knowledge Brain goes furth
 Ingest → Structure → Retrieve → Evaluate → Repair
 ```
 
-Three LangGraph `StateGraph` workflows drive the system:
+The system combines one queue-based ingestion pipeline with two LangGraph `StateGraph` workflows:
 
-- **Ingestion** — parallel chunk-level LLM extraction, document-scoped consolidation, knowledge graph persistence
+- **Ingestion** — queue-based chunk-level LLM extraction, document-scoped consolidation, knowledge graph persistence
 - **Retrieval** — query classification, graph context expansion, vector search, multi-signal reranking, answer synthesis
 - **Self-Healing** — task-type-routed repair handlers for duplicates, missing definitions, low-confidence answers, and contradictions
 

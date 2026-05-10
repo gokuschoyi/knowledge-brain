@@ -21,8 +21,10 @@ export function ChunkCard({ chunk, isRetrying, onRetry }: Props) {
   const isEmpty =
     chunk.extraction_status === 'completed' &&
     chunk.entity_count === 0 &&
-    chunk.relationship_count === 0;
-  const canRetry = chunk.extraction_status === 'failed' || isEmpty;
+    chunk.relationship_count === 0 &&
+    chunk.claim_count === 0;
+  const showEmptyWarning = isEmpty && !chunk.verified_empty;
+  const canRetry = chunk.extraction_status === 'failed';
 
   return (
     <Box
@@ -31,7 +33,7 @@ export function ChunkCard({ chunk, isRetrying, onRetry }: Props) {
       borderColor={
         chunk.extraction_status === 'failed'
           ? 'red.900'
-          : isEmpty
+          : showEmptyWarning
             ? 'orange.900'
             : 'slate.800'
       }
@@ -76,9 +78,28 @@ export function ChunkCard({ chunk, isRetrying, onRetry }: Props) {
           {chunk.entity_count} entities
         </Text>
         <Text fontSize='xs' color='slate.500'>
+          {chunk.claim_count} claims
+        </Text>
+        <Text fontSize='xs' color='slate.500'>
           {chunk.relationship_count} relationships
         </Text>
       </Flex>
+      {chunk.verified_empty && chunk.verification_message ? (
+        <Text mt='2' fontSize='xs' color='slate.500'>
+          Verified empty: {chunk.verification_message}
+        </Text>
+      ) : null}
+      {chunk.extraction_status === 'failed' && chunk.verification_message ? (
+        <Text mt='2' fontSize='xs' color='red.300'>
+          {chunk.verification_message}
+        </Text>
+      ) : null}
+      {showEmptyWarning ? (
+        <Text mt='2' fontSize='xs' color='orange.300'>
+          This chunk completed with no extracted knowledge and has not been
+          verified as truly empty.
+        </Text>
+      ) : null}
     </Box>
   );
 }

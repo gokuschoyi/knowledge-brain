@@ -38,7 +38,7 @@ const chunkPalette: Record<IngestionChunkDetail['status'], string> = {
 
 interface IngestionProgressProps {
   job: IngestionJob | null;
-  onRetryChunk?: (chunkId: number) => void;
+  onRetryChunk?: (chunkId: number) => Promise<void>;
   fillAvailableSpace?: boolean;
 }
 
@@ -55,9 +55,17 @@ export function IngestionProgress({
     (chunk) => chunk.status === 'failed',
   );
 
-  const handleRetry = (chunkId: number) => {
+  const handleRetry = async (chunkId: number) => {
     setRetrying((prev) => new Set(prev).add(chunkId));
-    onRetryChunk?.(chunkId);
+    try {
+      await onRetryChunk?.(chunkId);
+    } finally {
+      setRetrying((prev) => {
+        const next = new Set(prev);
+        next.delete(chunkId);
+        return next;
+      });
+    }
   };
 
   return (
@@ -286,7 +294,7 @@ export function IngestionProgress({
                               ml='3'
                               flexShrink={0}
                               loading={retrying.has(chunk.chunk_id)}
-                              onClick={() => handleRetry(chunk.chunk_id)}
+                              onClick={() => void handleRetry(chunk.chunk_id)}
                             >
                               Retry
                             </Button>
