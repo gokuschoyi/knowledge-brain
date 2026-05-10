@@ -76,7 +76,8 @@ export function BatchIngestionProgress({
             Ingestion Feed
           </Text>
           <Text fontSize='xs' color='fgMuted'>
-            {summary.total} file{summary.total !== 1 ? 's' : ''} · {summary.overall_progress}% overall
+            {summary.total} file{summary.total !== 1 ? 's' : ''} ·{' '}
+            {summary.overall_progress}% overall
           </Text>
         </Box>
         <Text fontSize='sm' color='cyan.300'>
@@ -97,22 +98,34 @@ export function BatchIngestionProgress({
       </Progress.Root>
 
       <Grid templateColumns='repeat(4, 1fr)' gap='2' mb='4'>
-        <BatchCounter label='Completed' value={summary.completed} color='green.400' />
-        <BatchCounter label='Processing' value={summary.processing + summary.pending} color='blue.400' />
+        <BatchCounter
+          label='Completed'
+          value={summary.completed}
+          color='green.400'
+        />
+        <BatchCounter
+          label='Processing'
+          value={summary.processing + summary.pending}
+          color='blue.400'
+        />
         <BatchCounter label='Failed' value={summary.failed} color='red.400' />
         <BatchCounter label='Total' value={summary.total} color='white' />
       </Grid>
 
-      <Stack gap='2' flex='1' minH='0' overflowY='auto'>
+      <Stack
+        gap='2'
+        flex='1'
+        minH='0'
+        overflowY='auto'
+        overscrollBehavior='contain'
+        pr='1'
+      >
         {jobs.map((job) => {
           const isExpanded = expandedJobIds.has(job.id);
           return (
             <Box key={job.id}>
               <Collapsible.Root open={isExpanded}>
-                <Collapsible.Trigger
-                  asChild
-                  onClick={() => toggleJob(job.id)}
-                >
+                <Collapsible.Trigger asChild onClick={() => toggleJob(job.id)}>
                   <Flex
                     justify='space-between'
                     align='center'
@@ -125,10 +138,17 @@ export function BatchIngestionProgress({
                     w='full'
                   >
                     <Flex align='center' gap='2' minW='0'>
-                      {isExpanded
-                        ? <ChevronDown size={14} color='var(--chakra-colors-slate-400)' />
-                        : <ChevronRight size={14} color='var(--chakra-colors-slate-400)' />
-                      }
+                      {isExpanded ? (
+                        <ChevronDown
+                          size={14}
+                          color='var(--chakra-colors-slate-400)'
+                        />
+                      ) : (
+                        <ChevronRight
+                          size={14}
+                          color='var(--chakra-colors-slate-400)'
+                        />
+                      )}
                       <Text fontSize='sm' color='white' truncate>
                         {job.document_title || `Document #${job.document}`}
                       </Text>
@@ -150,10 +170,13 @@ export function BatchIngestionProgress({
                 </Collapsible.Trigger>
 
                 <Collapsible.Content>
-                  <Box pt='2' pl='2'>
+                  <Box pt='2' pl='2' minH='0' overflow='hidden'>
                     <IngestionProgress
                       job={job}
-                      onRetryChunk={(chunkId) => onRetryChunk(job.document, chunkId)}
+                      onRetryChunk={(chunkId) =>
+                        onRetryChunk(job.document, chunkId)
+                      }
+                      maxHeight='520px'
                     />
                   </Box>
                 </Collapsible.Content>

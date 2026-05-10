@@ -117,7 +117,7 @@ class DashboardView(APIView):
             "Entity Link": entity_link_percent,
             "Quality": float(average_quality * 100),
             "Trust": float(trust_score_percent),
-            "Repair Pressure": float(
+            "RepairLoad": float(
                 max(
                     0,
                     100
@@ -207,7 +207,7 @@ class DashboardView(APIView):
                     "value": round(value, 1),
                     "tone": (
                         "warning"
-                        if label == "Repair Pressure"
+                        if label == "RepairLoad"
                         else "cyan" if label in {"Quality", "Trust"} else "indigo"
                     ),
                 }
