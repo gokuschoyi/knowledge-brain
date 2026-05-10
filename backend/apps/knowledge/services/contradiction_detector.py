@@ -11,9 +11,35 @@ from apps.knowledge.services.retrieval_enrichment import (
 )
 from apps.self_healing.models import SelfHealingTask
 
+PRICE_PATTERN = re.compile(r"\$([0-9]+(?:\.[0-9]{1,2})?)")
+DATE_PATTERN = re.compile(
+    r"\b((?:19|20)\d{2}[-/](?:0?[1-9]|1[0-2])[-/](?:0?[1-9]|[12]\d|3[01])|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+(?:19|20)\d{2})\b",
+    re.IGNORECASE,
+)
+VERSION_PATTERN = re.compile(r"\bv\d+(?:\.\d+){0,2}\b", re.IGNORECASE)
+QUANTITY_PATTERN = re.compile(
+    r"\b\d+(?:\.\d+)?\s*(?:users?|days?|weeks?|months?|years?|hours?|minutes?|gb|mb|tb|%|percent)\b", re.IGNORECASE
+)
+CATEGORY_PATTERN = re.compile(
+    r"\b(enabled|disabled|active|inactive|public|private|available|unavailable|supported|unsupported)\b",
+    re.IGNORECASE,
+)
 
-PRICE_PATTERN = re.compile(r"\$([0-9]+)")
-GENERIC_PRICE_SUBJECTS = {"pro plan", "plan", "pricing", "price"}
+
+def _extract_fact_values(claim_text: str) -> list[tuple[str, str]]:
+    extracted: list[tuple[str, str]] = []
+    for match in PRICE_PATTERN.findall(claim_text):
+        extracted.append(("price", match))
+    for match in DATE_PATTERN.findall(claim_text):
+        extracted.append(("date", match.lower()))
+    for match in VERSION_PATTERN.findall(claim_text):
+        extracted.append(("version", match.lower()))
+    for match in QUANTITY_PATTERN.findall(claim_text):
+        extracted.append(("quantity", match.lower()))
+    for match in CATEGORY_PATTERN.findall(claim_text):
+        extracted.append(("category", match.lower()))
+    return extracted
+
 
 def detect_contradictions_for_document(document: Document) -> list[SelfHealingTask]:
     tasks: list[SelfHealingTask] = []
@@ -33,18 +59,18 @@ def detect_contradictions_for_document(document: Document) -> list[SelfHealingTa
             grouped[key].append(claim)
 
     for key, claims in grouped.items():
-        seen_prices = {}
+        fact_groups: dict[str, dict[str, list[Claim]]] = defaultdict(lambda: defaultdict(list))
         for claim in claims:
-            match = PRICE_PATTERN.search(claim.text)
-            if not match:
+            for fact_type, normalized_value in _extract_fact_values(claim.text):
+                fact_groups[fact_type][normalized_value].append(claim)
+        for fact_type, fact_values in fact_groups.items():
+            if len(fact_values) <= 1:
                 continue
-            seen_prices.setdefault(match.group(1), []).append(claim)
-        if len(seen_prices) > 1:
-            flat_claims = [claim for claim_list in seen_prices.values() for claim in claim_list]
+            flat_claims = [claim for claim_list in fact_values.values() for claim in claim_list]
             claim_ids = [claim.id for claim in flat_claims]
             Claim.objects.filter(id__in=claim_ids).update(
                 contradiction_flag=True,
-                contradiction_review_state=Claim.REVIEW_CONTRADICTION,
+                contradiction_review_state=Claim.REVIEW_NEEDS_REVIEW,
             )
             mark_entities_with_contradictions(
                 [claim.subject_entity_id for claim in flat_claims if claim.subject_entity_id]
@@ -60,10 +86,12 @@ def detect_contradictions_for_document(document: Document) -> list[SelfHealingTa
                 task_type=SelfHealingTask.TYPE_CONTRADICTION,
                 priority=3,
                 title=f"Contradiction detected for {key}",
-                description="Conflicting values were found across related claims and documents.",
+                description=f"Conflicting {fact_type} values were found across related claims and documents.",
                 brain=document.brain,
                 related_document=document,
+                status=SelfHealingTask.STATUS_PENDING,
                 payload={
+                    "fact_type": fact_type,
                     "claim_ids": claim_ids,
                     "claims": [
                         {

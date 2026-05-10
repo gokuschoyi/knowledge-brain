@@ -68,20 +68,20 @@ def expand_graph(question: str, brain_id: str | None = None) -> dict:
     if entities:
         entity_ids = {entity.id for entity in entities}
         relationship_candidates = list(
-            Relationship.objects.filter(
-                source_entity_id__in=entity_ids
+            Relationship.objects.filter(source_entity_id__in=entity_ids).select_related(
+                "source_entity", "target_entity"
             )
-            .select_related("source_entity", "target_entity")
         ) + list(
-            Relationship.objects.filter(
-                target_entity_id__in=entity_ids
-            ).select_related("source_entity", "target_entity")
+            Relationship.objects.filter(target_entity_id__in=entity_ids).select_related(
+                "source_entity", "target_entity"
+            )
         )
-        relationship_candidates = list({relationship.id: relationship for relationship in relationship_candidates}.values())
+        relationship_candidates = list(
+            {relationship.id: relationship for relationship in relationship_candidates}.values()
+        )
         relationship_candidates.sort(
             key=lambda relationship: (
-                int(relationship.source_entity_id in entity_ids)
-                + int(relationship.target_entity_id in entity_ids),
+                int(relationship.source_entity_id in entity_ids) + int(relationship.target_entity_id in entity_ids),
                 relationship.confidence,
             ),
             reverse=True,
@@ -89,8 +89,9 @@ def expand_graph(question: str, brain_id: str | None = None) -> dict:
         relationships = relationship_candidates[:16]
 
         claim_candidates = list(
-            Claim.objects.filter(subject_entity_id__in=entity_ids)
-            .select_related("source_chunk", "subject_entity", "source_chunk__document")
+            Claim.objects.filter(subject_entity_id__in=entity_ids).select_related(
+                "source_chunk", "subject_entity", "source_chunk__document"
+            )
         )
         contradiction_question = any(
             marker in normalized_question
@@ -99,6 +100,8 @@ def expand_graph(question: str, brain_id: str | None = None) -> dict:
         claim_candidates.sort(
             key=lambda claim: (
                 0 if contradiction_question else int(not claim.contradiction_flag),
+                int(claim.contradiction_review_state == Claim.REVIEW_AUTHORITATIVE),
+                int(claim.contradiction_review_state == Claim.REVIEW_ACTIVE),
                 claim.confidence,
                 claim.created_at,
             ),

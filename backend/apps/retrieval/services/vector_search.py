@@ -28,7 +28,7 @@ def search_chunks(
     scored = []
     preferred_chunk_id_set = set(preferred_chunk_ids or [])
     related_entity_id_set = set(related_entity_ids or [])
-    
+
     queryset = Chunk.objects.select_related("document")
     if brain_id:
         queryset = queryset.filter(document__brain_id=brain_id)
@@ -43,9 +43,11 @@ def search_chunks(
         similarity = cosine_similarity(query_embedding, chunk.embedding)
         lexical_score = _keyword_score(question, chunk.text)
         preferred_boost = 0.18 if chunk.id in preferred_chunk_id_set else 0.0
-        related_entity_boost = 0.08 if related_entity_id_set.intersection(
-            chunk.entity_mentions.values_list("entity_id", flat=True)
-        ) else 0.0
+        related_entity_boost = (
+            0.08
+            if related_entity_id_set.intersection(chunk.entity_mentions.values_list("entity_id", flat=True))
+            else 0.0
+        )
         scored.append(
             {
                 "chunk": chunk,
@@ -54,6 +56,8 @@ def search_chunks(
                 "lexical_score": lexical_score,
                 "preferred_boost": preferred_boost,
                 "entity_boost": related_entity_boost,
+                "document_authority": chunk.document.source_authority,
+                "document_published_at": chunk.document.source_published_at,
             }
         )
     if not scored:
@@ -65,9 +69,11 @@ def search_chunks(
             if lexical_score <= 0:
                 continue
             preferred_boost = 0.18 if chunk.id in preferred_chunk_id_set else 0.0
-            related_entity_boost = 0.08 if related_entity_id_set.intersection(
-                chunk.entity_mentions.values_list("entity_id", flat=True)
-            ) else 0.0
+            related_entity_boost = (
+                0.08
+                if related_entity_id_set.intersection(chunk.entity_mentions.values_list("entity_id", flat=True))
+                else 0.0
+            )
             scored.append(
                 {
                     "chunk": chunk,
@@ -76,6 +82,8 @@ def search_chunks(
                     "lexical_score": lexical_score,
                     "preferred_boost": preferred_boost,
                     "entity_boost": related_entity_boost,
+                    "document_authority": chunk.document.source_authority,
+                    "document_published_at": chunk.document.source_published_at,
                 }
             )
     scored.sort(key=lambda item: item["score"], reverse=True)
