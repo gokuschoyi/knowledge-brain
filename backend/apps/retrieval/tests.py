@@ -11,6 +11,7 @@ from apps.knowledge.services.contradiction_detector import detect_contradictions
 from apps.knowledge.services.retrieval_enrichment import enrich_document_knowledge, enrich_entity
 from apps.retrieval.services.graph_search import expand_graph
 from apps.retrieval.services.query_memory import persist_query_repair_memory
+from apps.self_healing.models import SelfHealingTask
 
 
 class RetrievalImprovementTests(TestCase):
@@ -156,6 +157,31 @@ class RetrievalImprovementTests(TestCase):
         enrich_document_knowledge(other_document)
         detect_contradictions_for_document(document)
         graph = expand_graph("What does the Pro plan cost?", brain_id=self.brain.id)
+        task = SelfHealingTask.objects.get(task_type=SelfHealingTask.TYPE_CONTRADICTION)
 
         self.assertTrue(any(claim.contradiction_flag for claim in graph["claims"]))
         self.assertTrue(graph["contradiction_warnings"])
+        self.assertEqual(task.brain_id, self.brain.id)
+
+    def test_self_healing_list_includes_legacy_tasks_without_brain_fk(self):
+        document, _chunk = self._create_document(
+            "Legacy Contradiction Source",
+            "The Pro plan costs $49 per month.",
+        )
+        task = SelfHealingTask.objects.create(
+            task_type=SelfHealingTask.TYPE_CONTRADICTION,
+            priority=3,
+            title="Contradiction detected for pro plan",
+            description="Legacy task missing brain foreign key.",
+            related_document=document,
+            payload={"claim_ids": [1, 2], "claims": []},
+        )
+
+        response = self.client.get(
+            "/api/self-healing/tasks/",
+            {"brain_id": str(self.brain.id)},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        task_ids = [item["id"] for item in response.json()]
+        self.assertIn(task.id, task_ids)

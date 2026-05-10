@@ -42,6 +42,11 @@ class BundledExtractionResponse(BaseModel):
     relationships: list[ExtractedRelationship] = Field(default_factory=list)
 
 
+class EmptyExtractionVerificationResponse(BaseModel):
+    should_retry_extraction: bool = False
+    reason: str = Field(min_length=1)
+
+
 class AnswerResponse(BaseModel):
     answer: str
     confidence_score: float = Field(ge=0.0, le=1.0)
@@ -58,5 +63,4 @@ class MissingDefinitionResponse(BaseModel):
 
 
 class DocumentSummaryResponse(BaseModel):
-    summary: str
-
+    summary: str = Field(min_length=1)

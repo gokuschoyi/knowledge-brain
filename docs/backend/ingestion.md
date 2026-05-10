@@ -1,24 +1,10 @@
 # Ingestion Pipeline
 
-This document covers how documents move from raw upload to structured, searchable knowledge. The active path is **V2**, controlled by the `EXTRACTION_VERSION` environment variable.
+This document covers how documents move from raw upload to structured, searchable knowledge. Knowledge Brain uses a single queue-based ingestion pipeline coordinated by `backend/apps/documents/services/parallel_ingestion_v2.py`.
 
 ---
 
-## V1 vs V2
-
-| | V1 | V2 |
-|--|----|----|
-| Orchestration | LangGraph agent in `agents/ingestion_agent.py` | Direct service pipeline in `documents/services/parallel_ingestion_v2.py` |
-| Extraction | Sequential, one stage at a time | Parallel: one Celery task per chunk |
-| Intermediate storage | Direct DB writes per chunk | `ChunkExtractionArtifact` buffers each chunk's result |
-| Persistence | Per-chunk, may produce duplicate entities | Consolidated once per document — no duplicates |
-| Status | Legacy, still functional | Active, recommended |
-
-V2 is faster (parallel LLM calls) and produces cleaner knowledge (document-scoped consolidation).
-
----
-
-## V2 Pipeline — Step by Step
+## Pipeline — Step by Step
 
 The pipeline is coordinated by `backend/apps/documents/services/parallel_ingestion_v2.py` and runs as a Celery task (`run_document_ingestion`).
 
@@ -100,43 +86,33 @@ Upload received
 
 ---
 
-## Bundled Extraction (Step 6)
+## Bundled Extraction & Verification (Step 6)
 
-Each chunk task calls a single bundled LLM prompt that extracts entities, claims, and relationships in one shot.
+Each chunk task calls a bundled LLM prompt that extracts entities, claims, and relationships in one shot, followed by an automated **verification pass** for empty results.
 
-The model is instructed to:
-- Ground all extracted items in the chunk text — no hallucinated knowledge
-- Keep entity names consistent within the response
-- Return conservative confidence scores across the full `0.0–1.0` range
-- Avoid returning `1.0` unless absolutely certain
+### 1. Unified Extraction
+The model extracts structured knowledge based on strict limits (entities: 20, claims: 30, relationships: 20) and conservative confidence rules. All extractions use `invoke_structured_output`, which provides robust parsing logic that can recover JSON from message content or tool arguments across OpenAI, Anthropic, and Gemini models.
 
-**Structured output schema** (`agents/schemas.py`):
+### 2. Empty Result Verification
+If the extraction returns zero entities, claims, and relationships, the pipeline triggers a second **verification call** to an LLM. This "Empty Extraction Verifier" assesses whether the chunk genuinely lacks extractable knowledge (e.g., boilerplate, legal navigation) or if the extractor likely missed factual signal.
+
+- **Verified Empty**: The artifact is completed successfully with an empty payload. A verification message is stored explaining why.
+- **Retry Recommended**: The artifact is marked as **FAILED**. A verification message is stored explaining why the chunk likely contains data, allowing users to retry it.
+
+**Structured output schemas** (`agents/schemas.py`):
 
 ```python
-class ExtractionPayload(BaseModel):
+class BundledExtractionResponse(BaseModel):
     entities: list[ExtractedEntity]
     claims: list[ExtractedClaim]
     relationships: list[ExtractedRelationship]
 
-class ExtractedEntity(BaseModel):
-    name: str
-    description: str
-    aliases: list[str]
-    confidence: float  # raw LLM score
-
-class ExtractedClaim(BaseModel):
-    text: str
-    subject: str | None
-    confidence: float
-
-class ExtractedRelationship(BaseModel):
-    source: str
-    target: str
-    label: str
-    confidence: float
+class EmptyExtractionVerificationResponse(BaseModel):
+    should_retry_extraction: bool
+    reason: str
 ```
 
-If the model is unavailable or returns no valid structured output, the artifact falls back to an empty extraction result and is marked `failed` — the rest of the job continues with the remaining chunks.
+If the model is unavailable or returns no valid structured output, the artifact is marked `failed` — the rest of the job continues with the remaining chunks.
 
 ---
 

@@ -37,6 +37,9 @@ class ChunkSerializer(serializers.ModelSerializer):
     extraction_status = serializers.SerializerMethodField()
     entity_count = serializers.SerializerMethodField()
     relationship_count = serializers.SerializerMethodField()
+    claim_count = serializers.SerializerMethodField()
+    verified_empty = serializers.SerializerMethodField()
+    verification_message = serializers.SerializerMethodField()
 
     class Meta:
         model = Chunk
@@ -53,6 +56,9 @@ class ChunkSerializer(serializers.ModelSerializer):
             "extraction_status",
             "entity_count",
             "relationship_count",
+            "claim_count",
+            "verified_empty",
+            "verification_message",
         ]
 
     def get_extraction_status(self, obj):
@@ -64,6 +70,21 @@ class ChunkSerializer(serializers.ModelSerializer):
 
     def get_relationship_count(self, obj):
         return obj.relationships.count()
+
+    def get_claim_count(self, obj):
+        return obj.claims.count()
+
+    def get_verified_empty(self, obj):
+        artifact = obj.extraction_artifacts.order_by("-id").first()
+        return bool(
+            artifact
+            and artifact.empty_verification_status
+            == ChunkExtractionArtifact.EMPTY_CHECK_VERIFIED_EMPTY
+        )
+
+    def get_verification_message(self, obj):
+        artifact = obj.extraction_artifacts.order_by("-id").first()
+        return artifact.empty_verification_message if artifact else ""
 
 
 class DocumentSerializer(serializers.ModelSerializer):
@@ -158,6 +179,8 @@ class IngestionJobSerializer(serializers.ModelSerializer):
                 "status": artifact.status,
                 "attempt_count": artifact.attempt_count,
                 "error_message": artifact.error_message,
+                "empty_verification_status": artifact.empty_verification_status,
+                "empty_verification_message": artifact.empty_verification_message,
             }
             for artifact in obj.chunk_artifacts.select_related("chunk").order_by("chunk__chunk_index", "id")
         ]

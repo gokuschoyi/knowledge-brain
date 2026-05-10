@@ -24,7 +24,6 @@ Standard RAG chunks text and retrieves by similarity. Knowledge Brain goes furth
 | TypeScript | 5.6 | Type safety |
 | Vite | 5.4 | Build tool and dev server |
 | Chakra UI | 3.35 | Component library |
-| Tailwind CSS | — | Utility styling |
 | React Router | 6.27 | Client-side routing |
 | TanStack React Query | 5.59 | Server state, caching, background refetch |
 | React Flow | 11.11 | Knowledge graph canvas |
@@ -37,21 +36,21 @@ Standard RAG chunks text and retrieves by similarity. Knowledge Brain goes furth
 | Library | Version | Role |
 |---------|---------|------|
 | Python | 3.12 | Runtime |
-| Django | 5.1 | Web framework |
-| Django REST Framework | 3.15 | REST API |
-| Celery | 5.4 | Async task queue |
-| Redis | 5.0 (client) | Celery broker and result backend |
-| psycopg | 3.2 | PostgreSQL driver |
-| pgvector | 0.3.4 | Vector similarity search extension |
-| LangChain | 0.3.27 | Structured LLM interactions and output parsing |
-| LangGraph | 0.2.39 | StateGraph workflow orchestration |
-| langchain-anthropic | 0.2 | Anthropic (Claude) provider |
-| langchain-openai | 0.2 | OpenAI provider |
-| langchain-google-genai | 2.0 | Google Gemini provider (+ embeddings) |
+| Django | 6.0 | Web framework |
+| Django REST Framework | 3.17 | REST API |
+| Celery | 5.6 | Async task queue |
+| Redis | 7.4 | Celery broker and result backend |
+| psycopg | 3.3 | PostgreSQL driver |
+| pgvector | 0.4.2 | Vector similarity search extension |
+| LangChain | 1.2 | Structured LLM interactions and output parsing |
+| LangGraph | 1.1 | StateGraph workflow orchestration |
+| langchain-anthropic | 1.4 | Anthropic (Claude) provider |
+| langchain-openai | 1.2 | OpenAI provider |
+| langchain-google-genai | 4.2 | Google Gemini provider (+ embeddings) |
 | PyMuPDF | 1.27 | Primary PDF text extraction |
-| pypdf | 4.3 | PDF fallback extraction |
+| pypdf | 6.11 | PDF fallback extraction |
 | OCRmyPDF / Tesseract | — | Scanned PDF fallback (via system packages) |
-| BeautifulSoup4 | 4.12 | HTML parsing for URL ingestion |
+| BeautifulSoup4 | 4.14 | HTML parsing for URL ingestion |
 
 ### Infrastructure
 
@@ -70,9 +69,9 @@ Standard RAG chunks text and retrieves by similarity. Knowledge Brain goes furth
 Ingest → Structure → Retrieve → Evaluate → Repair
 ```
 
-Three LangGraph `StateGraph` workflows drive the system:
+The system combines one queue-based ingestion pipeline with two LangGraph `StateGraph` workflows:
 
-- **Ingestion** — parallel chunk-level LLM extraction, document-scoped consolidation, knowledge graph persistence
+- **Ingestion** — queue-based chunk-level LLM extraction, document-scoped consolidation, knowledge graph persistence
 - **Retrieval** — query classification, graph context expansion, vector search, multi-signal reranking, answer synthesis
 - **Self-Healing** — task-type-routed repair handlers for duplicates, missing definitions, low-confidence answers, and contradictions
 
@@ -84,6 +83,8 @@ Retrieval embeddings are fixed to Gemini (`gemini-embedding-001`) across all doc
 
 - Document ingestion from text, file upload, and URL
 - Parallel chunk extraction with bundled entity/claim/relationship prompts
+- **Automated Verification Pass**: Double-checks empty extractions to reduce false negatives
+- **Robust Parsing**: Unified `invoke_structured_output` helper for stable cross-provider JSON/Tool parsing
 - Confidence calibration layer — heuristic scoring, not raw LLM values
 - Source-grounded chat with streaming answers and confidence scoring
 - Knowledge gap detection and surfacing in chat responses

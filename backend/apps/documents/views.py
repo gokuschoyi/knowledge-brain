@@ -78,7 +78,12 @@ class DocumentChunksView(generics.ListAPIView):
         return (
             Chunk.objects
             .filter(document_id=self.kwargs["pk"])
-            .prefetch_related("extraction_artifacts", "entity_mentions", "relationships")
+            .prefetch_related(
+                "extraction_artifacts",
+                "entity_mentions",
+                "relationships",
+                "claims",
+            )
         )
 
 
@@ -94,7 +99,19 @@ class ChunkRetryView(APIView):
             return Response({"detail": "Chunk artifact not found."}, status=status.HTTP_404_NOT_FOUND)
         artifact.status = ChunkExtractionArtifact.STATUS_QUEUED
         artifact.error_message = ""
-        artifact.save(update_fields=["status", "error_message"])
+        artifact.empty_verification_status = (
+            ChunkExtractionArtifact.EMPTY_CHECK_NOT_NEEDED
+        )
+        artifact.empty_verification_message = ""
+        artifact.save(
+            update_fields=[
+                "status",
+                "error_message",
+                "empty_verification_status",
+                "empty_verification_message",
+                "updated_at",
+            ]
+        )
         run_chunk_bundled_extraction.delay(artifact.id)
         return Response({"artifact_id": artifact.id, "status": artifact.status}, status=status.HTTP_202_ACCEPTED)
 

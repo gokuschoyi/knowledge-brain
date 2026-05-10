@@ -1,6 +1,6 @@
 # Backend Architecture
 
-The backend is a Django 5 + Celery application split across six focused apps. All async work is brokered through Redis and executed by Celery workers. LLM interactions are handled through LangChain and orchestrated by LangGraph state machines.
+The backend is a Django 5 + Celery application split across six focused apps. All async work is brokered through Redis and executed by Celery workers. LLM interactions are handled through LangChain, with queue-based ingestion and LangGraph workflows for retrieval and self-healing.
 
 ---
 
@@ -63,7 +63,7 @@ Owns the structured knowledge graph produced by ingestion.
 
 ### `agents`
 
-Owns all LLM integration: model selection, prompts, structured output schemas, and LangGraph workflow entrypoints.
+Owns all LLM integration: model selection, prompts, structured output schemas, and agent workflow entrypoints.
 
 **Key files:**
 
@@ -72,7 +72,6 @@ Owns all LLM integration: model selection, prompts, structured output schemas, a
 | `llm.py` | Builds the active LLM client from `DEFAULT_LLM_PROVIDER` + `DEFAULT_LLM_MODEL`. Supports OpenAI, Anthropic, Gemini. Returns `None` when no key is configured (triggers deterministic fallback). |
 | `prompts.py` | All prompt templates: bundled extraction, entity definition, answer synthesis, repair prompts. |
 | `schemas.py` | Pydantic models for structured LLM output: `ExtractionPayload`, `AnswerPayload`, `RepairResult`. |
-| `ingestion_agent.py` | V1 LangGraph ingestion workflow (legacy path). |
 | `retrieval_agent.py` | Retrieval LangGraph workflow: `answer_question()` and `stream_question_answer()` entrypoints. |
 | `self_healing_agent.py` | Self-healing LangGraph workflow: routes by task type and executes the appropriate repair handler. |
 
@@ -109,7 +108,6 @@ Owns repair task records and the repair runner.
 
 ```
 run_document_ingestion(document_id, job_id)
-  │  (V2 path)
   ├─ [fan out] run_chunk_bundled_extraction(artifact_id)  ← ingestion queue, parallel
   │               runs bundled LLM extraction for one chunk
   │               stores result in ChunkExtractionArtifact

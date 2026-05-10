@@ -60,9 +60,12 @@ These control which ports the services bind to and which ports are exposed on th
 
 | Variable | Required | Default | Notes |
 |----------|----------|---------|-------|
-| `EXTRACTION_VERSION` | Yes | — | `V2` (recommended) or `V1` (legacy). Controls which ingestion pipeline is used. |
-| `INGESTION_V2_CHUNK_QUEUE` | Yes for V2 | `ingestion` | Dedicated Celery queue name for parallel chunk extraction tasks |
-| `INGESTION_V2_MAX_PARALLEL_CHUNK_TASKS` | Yes for V2 | `4` | Celery worker concurrency for the ingestion queue. Higher values speed up extraction but require more memory and LLM API capacity. |
+| `INGESTION_V2_CHUNK_QUEUE` | Yes | `ingestion_chunk_extraction` | Dedicated Celery queue name for parallel chunk extraction tasks |
+| `INGESTION_V2_MAX_PARALLEL_CHUNK_TASKS` | Yes | `5` | Celery worker concurrency for the ingestion queue. Higher values speed up extraction but require more memory and LLM API capacity. |
+| `EXTRACTION_MAX_ENTITIES` | No | `20` | Maximum number of entities to extract per chunk. |
+| `EXTRACTION_MAX_CLAIMS` | No | `30` | Maximum number of claims to extract per chunk. |
+| `EXTRACTION_MAX_RELATIONSHIPS` | No | `20` | Maximum number of relationships to extract per chunk. |
+| `EXTRACTION_MAX_OUTPUT_TOKENS` | No | `2048` | Maximum output token limit for extraction requests. |
 | `MAX_UPLOAD_MB` | No | `50` | Maximum file upload size in megabytes |
 
 ---

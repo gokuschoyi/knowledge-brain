@@ -29,7 +29,14 @@ from apps.documents.services.ingestion_progress import append_warning, ensure_st
 from apps.documents.services.text_cleaning import clean_text
 from apps.documents.services.text_extraction import extract_text
 from apps.knowledge.models import Claim, ChunkEntityMention, Entity, Relationship
-from apps.knowledge.services.bundled_extraction import extract_bundled_payload, generate_document_summary
+from apps.knowledge.services.bundled_extraction import (
+    BundledExtractionError,
+    EMPTY_CHECK_NOT_NEEDED,
+    EMPTY_CHECK_RETRY_RECOMMENDED,
+    EmptyExtractionVerificationError,
+    run_bundled_extraction_with_verification,
+    generate_document_summary,
+)
 from apps.knowledge.services.contradiction_detector import detect_contradictions_for_document
 from apps.knowledge.services.graph_builder import build_graph_for_document
 from apps.knowledge.services.quality_scoring import score_chunk_quality, score_document_quality
@@ -507,10 +514,24 @@ def run_chunk_bundled_extraction_for_artifact(artifact_id: int) -> None:
     artifact.attempt_count += 1
     artifact.started_at = timezone.now()
     artifact.error_message = ""
-    artifact.save(update_fields=["status", "attempt_count", "started_at", "error_message", "updated_at"])
+    artifact.empty_verification_status = (
+        ChunkExtractionArtifact.EMPTY_CHECK_NOT_NEEDED
+    )
+    artifact.empty_verification_message = ""
+    artifact.save(
+        update_fields=[
+            "status",
+            "attempt_count",
+            "started_at",
+            "error_message",
+            "empty_verification_status",
+            "empty_verification_message",
+            "updated_at",
+        ]
+    )
 
     try:
-        payload = extract_bundled_payload(
+        extraction = run_bundled_extraction_with_verification(
             artifact.chunk.text,
             artifact.document.title,
             artifact.document.llm_provider,
@@ -518,6 +539,37 @@ def run_chunk_bundled_extraction_for_artifact(artifact_id: int) -> None:
             chunk_id=artifact.chunk_id,
             document_id=artifact.document_id,
         )
+        if extraction["retry_recommended"]:
+            artifact.payload = {}
+            artifact.status = ChunkExtractionArtifact.STATUS_FAILED
+            artifact.error_message = (
+                "Chunk extraction returned empty results but the verifier "
+                "detected likely extractable knowledge."
+            )
+            artifact.empty_verification_status = EMPTY_CHECK_RETRY_RECOMMENDED
+            artifact.empty_verification_message = extraction[
+                "empty_verification_message"
+            ]
+            artifact.completed_at = timezone.now()
+            artifact.save(
+                update_fields=[
+                    "payload",
+                    "status",
+                    "error_message",
+                    "empty_verification_status",
+                    "empty_verification_message",
+                    "completed_at",
+                    "updated_at",
+                ]
+            )
+            return
+        payload = extraction["payload"]
+        artifact.empty_verification_status = extraction[
+            "empty_verification_status"
+        ]
+        artifact.empty_verification_message = extraction[
+            "empty_verification_message"
+        ]
         warnings = inspect_payload_confidence_patterns(payload)
         if warnings:
             logger.warning(
@@ -531,12 +583,72 @@ def run_chunk_bundled_extraction_for_artifact(artifact_id: int) -> None:
         artifact.payload = payload
         artifact.status = ChunkExtractionArtifact.STATUS_COMPLETED
         artifact.completed_at = timezone.now()
-        artifact.save(update_fields=["payload", "status", "completed_at", "updated_at"])
-    except Exception as exc:
+        artifact.error_message = ""
+        artifact.save(
+            update_fields=[
+                "payload",
+                "status",
+                "completed_at",
+                "error_message",
+                "empty_verification_status",
+                "empty_verification_message",
+                "updated_at",
+            ]
+        )
+    except EmptyExtractionVerificationError as exc:
+        artifact.payload = {}
         artifact.status = ChunkExtractionArtifact.STATUS_FAILED
         artifact.error_message = str(exc)
+        artifact.empty_verification_status = EMPTY_CHECK_RETRY_RECOMMENDED
+        artifact.empty_verification_message = str(exc)
         artifact.completed_at = timezone.now()
-        artifact.save(update_fields=["status", "error_message", "completed_at", "updated_at"])
+        artifact.save(
+            update_fields=[
+                "payload",
+                "status",
+                "error_message",
+                "empty_verification_status",
+                "empty_verification_message",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+    except BundledExtractionError as exc:
+        artifact.payload = {}
+        artifact.status = ChunkExtractionArtifact.STATUS_FAILED
+        artifact.error_message = str(exc)
+        artifact.empty_verification_status = EMPTY_CHECK_NOT_NEEDED
+        artifact.empty_verification_message = ""
+        artifact.completed_at = timezone.now()
+        artifact.save(
+            update_fields=[
+                "payload",
+                "status",
+                "error_message",
+                "empty_verification_status",
+                "empty_verification_message",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+    except Exception as exc:
+        artifact.payload = {}
+        artifact.status = ChunkExtractionArtifact.STATUS_FAILED
+        artifact.error_message = str(exc)
+        artifact.empty_verification_status = EMPTY_CHECK_NOT_NEEDED
+        artifact.empty_verification_message = ""
+        artifact.completed_at = timezone.now()
+        artifact.save(
+            update_fields=[
+                "payload",
+                "status",
+                "error_message",
+                "empty_verification_status",
+                "empty_verification_message",
+                "completed_at",
+                "updated_at",
+            ]
+        )
     finally:
         job = artifact.ingestion_job
         _update_chunk_stage(job)
@@ -639,7 +751,11 @@ def finalize_ingestion_job(job_id: int) -> None:
         set_stage_status(job, "scoring_quality", "running", "Scoring document quality", progress=96)
         document.quality_score = score_document_quality(document)
         document.summary = generate_document_summary(
-            document.raw_text or "", document.title, document_id=document.id
+            document.raw_text or "",
+            document.title,
+            llm_provider=document.llm_provider,
+            llm_model=document.llm_model,
+            document_id=document.id,
         )
         document.status = Document.STATUS_COMPLETED
         document.error_message = ""
