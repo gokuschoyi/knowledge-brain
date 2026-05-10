@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from django.db.models import Count
 from rest_framework import serializers
 
@@ -6,11 +8,35 @@ from apps.documents.models import Chunk, ChunkExtractionArtifact, Document, Inge
 from apps.documents.services.ingestion_progress import STAGE_DEFINITIONS, ensure_stage_metadata
 from apps.knowledge.models import Entity, Relationship
 
+_ALLOWED_FILE_EXTENSIONS = {".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv", ".pptx"}
+
 
 class DocumentIngestSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
-        fields = ["brain", "title", "source_type", "raw_text", "raw_file", "url", "tags", "llm_provider", "llm_model"]
+        fields = [
+            "brain",
+            "title",
+            "source_type",
+            "raw_text",
+            "raw_file",
+            "url",
+            "source_authority",
+            "source_published_at",
+            "source_observed_at",
+            "tags",
+            "llm_provider",
+            "llm_model",
+        ]
+
+    def validate_raw_file(self, value):
+        suffix = Path(value.name).suffix.lower()
+        if suffix not in _ALLOWED_FILE_EXTENSIONS:
+            raise serializers.ValidationError(
+                f"Unsupported file type '{suffix}'. "
+                f"Allowed: {', '.join(sorted(_ALLOWED_FILE_EXTENSIONS))}"
+            )
+        return value
 
     def validate(self, attrs):
         source_type = attrs.get("source_type")
@@ -77,9 +103,7 @@ class ChunkSerializer(serializers.ModelSerializer):
     def get_verified_empty(self, obj):
         artifact = obj.extraction_artifacts.order_by("-id").first()
         return bool(
-            artifact
-            and artifact.empty_verification_status
-            == ChunkExtractionArtifact.EMPTY_CHECK_VERIFIED_EMPTY
+            artifact and artifact.empty_verification_status == ChunkExtractionArtifact.EMPTY_CHECK_VERIFIED_EMPTY
         )
 
     def get_verification_message(self, obj):
@@ -91,6 +115,10 @@ class DocumentSerializer(serializers.ModelSerializer):
     chunks_count = serializers.IntegerField(source="chunks.count", read_only=True)
     source_label = serializers.CharField(source="get_source_type_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    source_authority_label = serializers.CharField(
+        source="get_source_authority_display",
+        read_only=True,
+    )
     brain_name = serializers.CharField(source="brain.name", read_only=True)
     latest_job_status = serializers.SerializerMethodField()
     latest_activity_at = serializers.DateTimeField(source="updated_at", read_only=True)
@@ -102,6 +130,10 @@ class DocumentSerializer(serializers.ModelSerializer):
             "title",
             "source_type",
             "source_label",
+            "source_authority",
+            "source_authority_label",
+            "source_published_at",
+            "source_observed_at",
             "tags",
             "llm_provider",
             "llm_model",
@@ -127,12 +159,14 @@ class IngestionJobSerializer(serializers.ModelSerializer):
     stages = serializers.SerializerMethodField()
     chunk_progress = serializers.SerializerMethodField()
     chunk_details = serializers.SerializerMethodField()
+    document_title = serializers.CharField(source="document.title", read_only=True)
 
     class Meta:
         model = IngestionJob
         fields = [
             "id",
             "document",
+            "document_title",
             "status",
             "current_step",
             "progress",
@@ -148,7 +182,10 @@ class IngestionJobSerializer(serializers.ModelSerializer):
 
     def get_stages(self, obj: IngestionJob) -> list[dict]:
         stages = ensure_stage_metadata(obj)["stages"]
-        return [stages.get(key, {"key": key, "label": label, "status": "pending", "message": ""}) for key, label in STAGE_DEFINITIONS]
+        return [
+            stages.get(key, {"key": key, "label": label, "status": "pending", "message": ""})
+            for key, label in STAGE_DEFINITIONS
+        ]
 
     def get_chunk_progress(self, obj: IngestionJob) -> dict:
         counts = {
@@ -160,8 +197,7 @@ class IngestionJobSerializer(serializers.ModelSerializer):
             "successful_artifacts": 0,
         }
         aggregate = {
-            item["status"]: item["count"]
-            for item in obj.chunk_artifacts.values("status").annotate(count=Count("id"))
+            item["status"]: item["count"] for item in obj.chunk_artifacts.values("status").annotate(count=Count("id"))
         }
         counts["queued"] = aggregate.get(ChunkExtractionArtifact.STATUS_QUEUED, 0)
         counts["running"] = aggregate.get(ChunkExtractionArtifact.STATUS_RUNNING, 0)
@@ -198,4 +234,12 @@ class DocumentRelationshipSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Relationship
-        fields = ["id", "source_entity", "target_entity", "source_name", "target_name", "relationship_type", "confidence"]
+        fields = [
+            "id",
+            "source_entity",
+            "target_entity",
+            "source_name",
+            "target_name",
+            "relationship_type",
+            "confidence",
+        ]

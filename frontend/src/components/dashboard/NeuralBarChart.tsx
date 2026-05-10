@@ -8,13 +8,28 @@ export type NeuralBarDatum = {
   tone?: 'indigo' | 'cyan' | 'warning';
 };
 
-const toneColor = {
-  indigo:
-    'linear-gradient(180deg, rgba(99, 102, 241, 0.95), rgba(99, 102, 241, 0.28))',
-  cyan: 'linear-gradient(180deg, rgba(34, 211, 238, 0.95), rgba(34, 211, 238, 0.28))',
-  warning:
-    'linear-gradient(180deg, rgba(251, 191, 36, 0.95), rgba(251, 191, 36, 0.28))',
-} as const;
+const barPalettes = [
+  {
+    fill: 'linear-gradient(180deg, rgba(99, 102, 241, 0.96), rgba(99, 102, 241, 0.26))',
+    shadow: '0 12px 24px rgba(99, 102, 241, 0.18)',
+  },
+  {
+    fill: 'linear-gradient(180deg, rgba(34, 211, 238, 0.96), rgba(34, 211, 238, 0.26))',
+    shadow: '0 12px 24px rgba(34, 211, 238, 0.18)',
+  },
+  {
+    fill: 'linear-gradient(180deg, rgba(251, 191, 36, 0.96), rgba(251, 191, 36, 0.26))',
+    shadow: '0 12px 24px rgba(251, 191, 36, 0.18)',
+  },
+  {
+    fill: 'linear-gradient(180deg, rgba(52, 211, 153, 0.96), rgba(52, 211, 153, 0.24))',
+    shadow: '0 12px 24px rgba(52, 211, 153, 0.16)',
+  },
+  {
+    fill: 'linear-gradient(180deg, rgba(244, 114, 182, 0.96), rgba(244, 114, 182, 0.24))',
+    shadow: '0 12px 24px rgba(244, 114, 182, 0.16)',
+  },
+] as const;
 
 export function NeuralBarChart({ data }: { data: NeuralBarDatum[] }) {
   const maxValue = Math.max(...data.map((item) => item.value), 1);
@@ -26,7 +41,7 @@ export function NeuralBarChart({ data }: { data: NeuralBarDatum[] }) {
   return (
     <HStack align='end' justify='space-between' gap='3' h='220px'>
       {data.map((item, index) => {
-        const tone = item.tone ?? 'indigo';
+        const palette = barPalettes[index % barPalettes.length];
         return (
           <Stack key={item.label} gap='3' flex='1' h='full' justify='end'>
             <Text
@@ -65,8 +80,8 @@ export function NeuralBarChart({ data }: { data: NeuralBarDatum[] }) {
                     width: '100%',
                     height: '100%',
                     borderRadius: '0.75rem',
-                    background: toneColor[tone],
-                    boxShadow: '0 12px 24px rgba(99, 102, 241, 0.18)',
+                    background: palette.fill,
+                    boxShadow: palette.shadow,
                     transformOrigin: 'bottom',
                   }}
                 />

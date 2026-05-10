@@ -58,14 +58,17 @@ export function DocumentItem({
             align='flex-start'
             w={'full'}
           >
-            <VStack gap='2' wrap='wrap'>
+            <VStack gap='2' wrap='wrap' alignItems={'flex-start'}>
               <Box display='flex' gap='2' alignItems='center' flexWrap='wrap'>
-                <StatusPill status={document.status}>
-                  {document.status_label ?? document.status}
-                </StatusPill>
                 <MetaChip
                   label='source'
                   value={document.source_label ?? document.source_type}
+                />
+                <MetaChip
+                  label='authority'
+                  value={
+                    document.source_authority_label ?? document.source_authority
+                  }
                 />
               </Box>
               {document.brain_name ? (
@@ -83,13 +86,24 @@ export function DocumentItem({
           </HStack>
 
           <VStack gap='2' align='flex-start' w='full'>
-            <ChakraLink asChild _hover={{ textDecoration: 'none' }}>
-              <RouterLink to={`/documents/${document.id}`}>
-                <Text color='white' fontSize='lg' fontWeight='700'>
-                  {document.title}
-                </Text>
-              </RouterLink>
-            </ChakraLink>
+            <HStack
+              w='full'
+              justify='space-between'
+              align='flex-start'
+              gap='3'
+              flexWrap='wrap'
+            >
+              <ChakraLink asChild _hover={{ textDecoration: 'none' }}>
+                <RouterLink to={`/documents/${document.id}`}>
+                  <Text color='white' fontSize='lg' fontWeight='700'>
+                    {document.title}
+                  </Text>
+                </RouterLink>
+              </ChakraLink>
+              <StatusPill status={document.status}>
+                {document.status_label ?? document.status}
+              </StatusPill>
+            </HStack>
 
             <Text fontSize='sm' color='fgMuted' lineClamp={2}>
               {document.summary || 'No summary generated yet.'}

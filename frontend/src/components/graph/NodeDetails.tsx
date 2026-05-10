@@ -7,7 +7,9 @@ import {
   Stack,
   Text,
 } from '@chakra-ui/react';
+import { useNavigate } from 'react-router-dom';
 import { Node } from 'reactflow';
+import { Button } from '../common/Button';
 
 interface NodeDetailsProps {
   selectedNode: Node;
@@ -36,6 +38,7 @@ const StatItem = ({
 );
 
 export function NodeDetails({ selectedNode }: NodeDetailsProps) {
+  const navigate = useNavigate();
   const data = selectedNode.data || {};
   const isEntity = data.originalType === 'entity';
 
@@ -110,6 +113,86 @@ export function NodeDetails({ selectedNode }: NodeDetailsProps) {
           value={isEntity ? data.mention_count : data.chunks_count}
         />
       </SimpleGrid>
+
+      <Stack gap='2'>
+        {isEntity ? (
+          <>
+            <HStack gap='2' flexWrap='wrap'>
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={() => navigate(`/documents?entity_id=${data.id}`)}
+              >
+                Supporting docs
+              </Button>
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={() =>
+                  navigate(
+                    `/self-healing?related_entity_id=${data.id}&task_type=contradiction`,
+                  )
+                }
+              >
+                Contradictions
+              </Button>
+              <Button
+                size='sm'
+                variant='outline'
+                onClick={() => navigate('/self-healing')}
+              >
+                Run repair
+              </Button>
+            </HStack>
+            {Array.isArray(data.supporting_documents) &&
+            data.supporting_documents.length > 0 ? (
+              <Box>
+                <Heading
+                  size='xs'
+                  textTransform='uppercase'
+                  color='slate.500'
+                  mb='2'
+                  letterSpacing='wider'
+                >
+                  Supporting documents
+                </Heading>
+                <Stack gap='2'>
+                  {data.supporting_documents.map(
+                    (document: { id: number; title: string }) => (
+                      <Button
+                        key={document.id}
+                        size='sm'
+                        variant='ghost'
+                        justifyContent='flex-start'
+                        onClick={() => navigate(`/documents/${document.id}`)}
+                      >
+                        {document.title}
+                      </Button>
+                    ),
+                  )}
+                </Stack>
+              </Box>
+            ) : null}
+          </>
+        ) : (
+          <HStack gap='2' flexWrap='wrap'>
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={() => navigate(`/documents/${data.id}`)}
+            >
+              Open document
+            </Button>
+            <Button
+              size='sm'
+              variant='outline'
+              onClick={() => navigate('/chat')}
+            >
+              Ask in chat
+            </Button>
+          </HStack>
+        )}
+      </Stack>
 
       {isEntity &&
         data.aliases &&

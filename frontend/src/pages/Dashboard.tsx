@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import {
+  ButtonGroup,
   Grid,
   Heading,
   SimpleGrid,
@@ -7,9 +8,11 @@ import {
   Text,
   VStack,
 } from '@chakra-ui/react';
+import { useNavigate } from 'react-router-dom';
 
 import { getBrains } from '../api/brains';
 import { getDashboard } from '../api/dashboard';
+import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
 import { LoadingState } from '../components/common/LoadingState';
 import { MetricTile } from '../components/common/MetricTile';
@@ -19,6 +22,7 @@ import { useActiveBrain } from '../context/useActiveBrain';
 
 export function DashboardPage() {
   const { activeBrainId } = useActiveBrain();
+  const navigate = useNavigate();
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', activeBrainId],
     queryFn: () => getDashboard(activeBrainId || undefined),
@@ -31,9 +35,6 @@ export function DashboardPage() {
   if (isLoading || brainsQuery.isLoading || !data) {
     return <LoadingState label='Loading dashboard...' />;
   }
-
-  const activeBrain =
-    brainsQuery.data?.find((brain) => brain.id === activeBrainId) ?? null;
 
   const stats = [
     {
@@ -49,21 +50,28 @@ export function DashboardPage() {
       accent: 'rgba(34, 211, 238, 0.9)',
     },
     {
-      label: 'Open Repairs',
-      value: data.open_self_healing_tasks,
-      hint: `${data.hero.documents_failed} document failures`,
+      label: 'Contradictions',
+      value: data.unresolved_contradictions,
+      hint: `${data.unresolved_low_confidence} unanswered gaps`,
       accent: 'rgba(251, 191, 36, 0.9)',
     },
     {
-      label: 'Chunk Volume',
-      value: data.chunks,
-      hint: `${data.hero.documents_processing} documents processing`,
+      label: 'Evidence Trust',
+      value: `${data.trust_score_percent.toFixed(0)}%`,
+      hint: `${data.authority_coverage_percent.toFixed(0)}% authority · ${data.freshness_coverage_percent.toFixed(0)}% freshness`,
       accent: 'rgba(148, 163, 184, 0.8)',
     },
   ];
 
   return (
-    <Stack gap={6} p={6} h='full' minH='0' className='dashboard-page'>
+    <Stack
+      gap={6}
+      p={6}
+      h='full'
+      minH='0'
+      overflowY='auto'
+      className='dashboard-page'
+    >
       <Grid templateColumns={{ base: '1fr', xl: '1.4fr 0.85fr' }} gap={6}>
         <BrainHeroCard hero={data.hero} brainSummary={data.brain_summary} />
 
@@ -78,7 +86,8 @@ export function DashboardPage() {
               {data.quality_score_percent.toFixed(1)}%
             </Heading>
             <Text fontSize='sm' color='fgMuted'>
-              Average document quality across the current scope.
+              Composite score from source authority, freshness, claim review
+              coverage, and contradiction pressure.
             </Text>
             <NeuralBarChart data={data.analytics} />
           </Stack>
@@ -101,41 +110,49 @@ export function DashboardPage() {
         <Card variant='panel'>
           <Stack gap='4' justifyContent={'space-between'} h='full'>
             <VStack alignItems={'start'} gap='1'>
-              <Text textStyle='sectionLabel'>Brain Metadata</Text>
+              <Text textStyle='sectionLabel'>Recommended Actions</Text>
               <Heading size='md' color='white'>
-                {activeBrain ? activeBrain.name : 'All Brains'}
+                Next best cleanup steps
               </Heading>
               <Text fontSize='sm' color='fgMuted'>
-                {activeBrain
-                  ? activeBrain.description ||
-                    'Selected brain has no custom description.'
-                  : `${brainsQuery.data?.length ?? 0} brains available. Use the scope selector to narrow the entire workspace.`}
+                Focus the team on the changes most likely to improve trust and
+                retrieval quality.
               </Text>
             </VStack>
-            <SimpleGrid columns={2} gap='3'>
-              <MetricTile
-                label='Created'
-                value={
-                  activeBrain
-                    ? new Date(activeBrain.created_at).toLocaleDateString()
-                    : 'Global'
-                }
-                minH='0'
-                px='4'
-                py='4'
-              />
-              <MetricTile
-                label='Updated'
-                value={
-                  activeBrain
-                    ? new Date(activeBrain.updated_at).toLocaleDateString()
-                    : 'Live'
-                }
-                minH='0'
-                px='4'
-                py='4'
-              />
-            </SimpleGrid>
+            <Stack gap='3'>
+              {data.recommended_actions.map((action) => (
+                <Card key={action.href} variant='metric' px='4' py='4'>
+                  <Stack
+                    direction={{ base: 'column', md: 'row' }}
+                    gap='3'
+                    justify='space-between'
+                    align={{ base: 'stretch', md: 'center' }}
+                  >
+                    <Stack gap='1'>
+                      <Text
+                        fontSize='xs'
+                        color='slate.500'
+                        textTransform='uppercase'
+                      >
+                        {action.label}
+                      </Text>
+                      <Heading size='md' color='white'>
+                        {action.count}
+                      </Heading>
+                    </Stack>
+                    <ButtonGroup>
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        onClick={() => navigate(action.href)}
+                      >
+                        Open
+                      </Button>
+                    </ButtonGroup>
+                  </Stack>
+                </Card>
+              ))}
+            </Stack>
           </Stack>
         </Card>
       </Grid>

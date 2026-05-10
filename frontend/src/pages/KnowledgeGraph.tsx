@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Box, Stack, Text } from '@chakra-ui/react';
+import { useLocation } from 'react-router-dom';
 
 import { getBrains } from '../api/brains';
 import type { GraphNode } from '../api/types';
@@ -19,7 +20,12 @@ type GraphTab = 'graph' | 'isolated';
 
 export function KnowledgeGraphPage() {
   const { activeBrainId } = useActiveBrain();
-  const [tab, setTab] = useState<GraphTab>('graph');
+  const location = useLocation();
+  const [tab, setTab] = useState<GraphTab>(() =>
+    new URLSearchParams(location.search).get('tab') === 'isolated'
+      ? 'isolated'
+      : 'graph',
+  );
   const brainsQuery = useQuery({
     queryKey: ['brains'],
     queryFn: getBrains,

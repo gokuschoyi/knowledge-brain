@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Box, Flex, Stack, Text, VStack } from '@chakra-ui/react';
 
 import { deleteDocument, listDocuments, retryDocument } from '../api/documents';
@@ -14,13 +14,22 @@ export function DocumentsPage() {
   const { activeBrainId } = useActiveBrain();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
+  const entityIdFilter = useMemo(() => {
+    const raw = new URLSearchParams(location.search).get('entity_id');
+    return raw ? Number(raw) : null;
+  }, [location.search]);
+  const statusFilter = useMemo(
+    () => new URLSearchParams(location.search).get('status'),
+    [location.search],
+  );
   const [pendingDeleteDocument, setPendingDeleteDocument] = useState<{
     id: number;
     title: string;
   } | null>(null);
   const { data, isLoading } = useQuery({
-    queryKey: ['documents', activeBrainId],
-    queryFn: () => listDocuments(activeBrainId || undefined),
+    queryKey: ['documents', activeBrainId, entityIdFilter],
+    queryFn: () => listDocuments(activeBrainId || undefined, entityIdFilter),
   });
   const retryMutation = useMutation({
     mutationFn: retryDocument,
@@ -37,9 +46,15 @@ export function DocumentsPage() {
     },
   });
 
+  const filteredDocuments = useMemo(() => {
+    if (!data) return [];
+    if (!statusFilter) return data;
+    return data.filter((document) => document.status === statusFilter);
+  }, [data, statusFilter]);
+
   if (isLoading || !data) return <LoadingState label='Loading documents...' />;
 
-  if (!data.length) {
+  if (!filteredDocuments.length) {
     return (
       <Box p={6}>
         <Card>
@@ -70,7 +85,7 @@ export function DocumentsPage() {
     <VStack gap={6} align='stretch' h='full' minH='0' overflow='hidden' pl={6}>
       <Flex flex='1' minH='0' overflow='hidden'>
         <DocumentList
-          documents={data}
+          documents={filteredDocuments}
           onRetry={async (id) => {
             await retryMutation.mutateAsync(id);
           }}

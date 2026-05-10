@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.knowledge.models import Claim, Entity, Relationship
+from apps.self_healing.models import SelfHealingTask
 from apps.knowledge.serializers import (
     ClaimSerializer,
     EntitySerializer,
@@ -44,11 +45,36 @@ class GraphView(APIView):
         isolated_entities = []
 
         for entity in entity_qs:
+            supporting_documents = list(
+                entity.mentions.select_related("chunk__document")
+                .values("chunk__document_id", "chunk__document__title")
+                .distinct()[:5]
+            )
+            open_issue_count = SelfHealingTask.objects.filter(
+                related_entity=entity,
+                status__in=[
+                    SelfHealingTask.STATUS_PENDING,
+                    SelfHealingTask.STATUS_RUNNING,
+                    SelfHealingTask.STATUS_UNRESOLVED,
+                    SelfHealingTask.STATUS_REVIEW_REQUIRED,
+                ],
+            ).count()
             node = {
                 "id": f"entity-{entity.id}",
                 "type": "entity",
                 "label": entity.name,
-                "data": GraphEntitySerializer(entity).data,
+                "data": {
+                    **GraphEntitySerializer(entity).data,
+                    "supporting_documents": [
+                        {
+                            "id": item["chunk__document_id"],
+                            "title": item["chunk__document__title"],
+                        }
+                        for item in supporting_documents
+                    ],
+                    "open_issue_count": open_issue_count,
+                    "has_contradictions": bool(entity.metadata.get("has_contradictions")),
+                },
             }
             if entity.id in connected_entity_ids:
                 connected_nodes.append(node)
@@ -81,7 +107,9 @@ class EntityRelationshipsView(generics.ListAPIView):
 
     def get_queryset(self):
         entity_id = self.kwargs["pk"]
-        return Relationship.objects.filter(source_entity_id=entity_id) | Relationship.objects.filter(target_entity_id=entity_id)
+        return Relationship.objects.filter(source_entity_id=entity_id) | Relationship.objects.filter(
+            target_entity_id=entity_id
+        )
 
 
 class ClaimListView(generics.ListAPIView):
