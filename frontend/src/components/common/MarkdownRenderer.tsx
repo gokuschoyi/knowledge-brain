@@ -1,6 +1,7 @@
 import React from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Text, Box, Heading, Code, Link, Stack } from '@chakra-ui/react';
 
 interface MarkdownRendererProps {
@@ -13,6 +14,7 @@ export const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
     <Box maxW='100%' overflowX='hidden' display='block'>
       <Markdown
         remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw]}
         components={{
           h1: ({ node: _node, ...props }) => (
             <Heading
@@ -135,6 +137,18 @@ export const MarkdownRenderer = ({ content }: MarkdownRendererProps) => {
               mb={3}
               maxW='100%'
               wordBreak='break-word'
+            >
+              {props.children as React.ReactNode}
+            </Box>
+          ),
+          mark: ({ node: _node, className, ...props }) => (
+            <Box
+              as='mark'
+              className={className}
+              bg='rgba(251, 190, 36, 0.76)'
+              color='inherit'
+              borderRadius='2px'
+              px='0.5'
             >
               {props.children as React.ReactNode}
             </Box>

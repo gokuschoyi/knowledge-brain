@@ -14,24 +14,125 @@ import {
   IconButton,
   Icon,
   Text,
-  Spinner,
   Stack,
   HStack,
 } from '@chakra-ui/react';
 import { Send, MessageSquare } from 'lucide-react';
 
-import type { ChatMessage } from '../../api/types';
+import type {
+  ChatAnswerSection,
+  ChatMessage,
+  ChatResponse,
+  ChatSource,
+  CitationCoverageStatus,
+  JsonValue,
+} from '../../api/types';
 import { Card } from '../common/Card';
 import { MetaChip } from '../common/MetaChip';
 import { MessageBubble } from './MessageBubble';
+
+function isJsonObject(value: JsonValue): value is { [key: string]: JsonValue } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readAnswerSections(message: ChatMessage): ChatAnswerSection[] {
+  const sections = message.metadata.answer_sections;
+  if (!Array.isArray(sections)) return [];
+  return sections.flatMap((section) => {
+    if (!isJsonObject(section)) return [];
+    if (
+      typeof section.content !== 'string' ||
+      !Array.isArray(section.citation_numbers)
+    ) {
+      return [];
+    }
+    return [
+      {
+        content: section.content,
+        citation_numbers: section.citation_numbers.filter(
+          (value): value is number => typeof value === 'number',
+        ),
+      },
+    ];
+  });
+}
+
+function readCitationCoverageStatus(
+  message: ChatMessage,
+): CitationCoverageStatus | null {
+  const status = message.metadata.citation_coverage_status;
+  return status === 'well_supported' ||
+    status === 'partially_supported' ||
+    status === 'needs_verification'
+    ? status
+    : null;
+}
+
+function readStringList(
+  message: ChatMessage,
+  key: 'knowledge_gaps' | 'contradiction_warnings',
+): string[] {
+  const value = message.metadata[key];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+function readSources(message: ChatMessage): ChatSource[] {
+  return message.sources.flatMap((source) => {
+    if (!isJsonObject(source)) return [];
+    if (
+      typeof source.document_id !== 'number' ||
+      typeof source.document_title !== 'string'
+    ) {
+      return [];
+    }
+    const quoteText =
+      typeof source.quote_text === 'string'
+        ? source.quote_text
+        : typeof source.snippet === 'string'
+          ? source.snippet
+          : null;
+    if (!quoteText) return [];
+    return [
+      {
+        document_id: source.document_id,
+        document_title: source.document_title,
+        evidence_span_id:
+          typeof source.evidence_span_id === 'number'
+            ? source.evidence_span_id
+            : undefined,
+        quote_text: quoteText,
+        snippet:
+          typeof source.snippet === 'string' ? source.snippet : undefined,
+        file_extension:
+          typeof source.file_extension === 'string'
+            ? source.file_extension
+            : null,
+        page_number:
+          typeof source.page_number === 'number' ? source.page_number : null,
+        review_status:
+          typeof source.review_status === 'string'
+            ? source.review_status
+            : null,
+        location_label:
+          typeof source.location_label === 'string'
+            ? source.location_label
+            : null,
+      },
+    ];
+  });
+}
 
 export function ChatWindow({
   messages,
   hasDocuments,
   pendingQuestion,
   streamingAnswer,
+  streamingResponse,
+  streamingStage,
   selectedAssistantMessageId,
   onAssistantMessageSelect,
+  onSourceClick,
   onSubmit,
   loading,
 }: {
@@ -39,13 +140,51 @@ export function ChatWindow({
   hasDocuments: boolean;
   pendingQuestion: string | null;
   streamingAnswer: string;
+  streamingResponse: ChatResponse | null;
+  streamingStage:
+    | 'searching_knowledge'
+    | 'generating_answer'
+    | 'grounding_citations'
+    | 'saving_response'
+    | null;
   selectedAssistantMessageId: number | null;
   onAssistantMessageSelect: (messageId: number) => void;
+  onSourceClick: (source: ChatSource) => void;
   onSubmit: (question: string) => Promise<void>;
   loading: boolean;
 }) {
   const [question, setQuestion] = useState('');
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const statusPills = useMemo(
+    () =>
+      [
+        { key: 'searching_knowledge', label: 'Search knowledge' },
+        { key: 'generating_answer', label: 'Generate answer' },
+        { key: 'grounding_citations', label: 'Ground citations' },
+        { key: 'saving_response', label: 'Save response' },
+      ].map((pill, index, pills) => {
+        const activeIndex = streamingStage
+          ? pills.findIndex((item) => item.key === streamingStage)
+          : -1;
+        const state: 'pending' | 'active' | 'complete' =
+          activeIndex === -1
+            ? 'pending'
+            : index < activeIndex
+              ? 'complete'
+              : index === activeIndex
+                ? 'active'
+                : 'pending';
+        return { ...pill, state };
+      }),
+    [streamingStage],
+  );
+  const currentStatusPill = useMemo(
+    () =>
+      streamingStage
+        ? (statusPills.find((pill) => pill.key === streamingStage) ?? null)
+        : null,
+    [statusPills, streamingStage],
+  );
 
   // Memoize the callback to prevent child re-renders
   const handleAssistantMessageSelect = useCallback(
@@ -81,14 +220,39 @@ export function ChatWindow({
           message.id === selectedAssistantMessageId
         }
         confidenceScore={message.confidence_score}
+        citationCoverageStatus={
+          message.role === 'assistant'
+            ? readCitationCoverageStatus(message)
+            : null
+        }
+        contradictionWarnings={
+          message.role === 'assistant'
+            ? readStringList(message, 'contradiction_warnings')
+            : []
+        }
+        knowledgeGaps={
+          message.role === 'assistant'
+            ? readStringList(message, 'knowledge_gaps')
+            : []
+        }
+        answerSections={
+          message.role === 'assistant' ? readAnswerSections(message) : []
+        }
+        evidenceItems={message.role === 'assistant' ? readSources(message) : []}
         onClick={
           message.role === 'assistant'
             ? () => handleAssistantMessageSelect(message.id)
             : undefined
         }
+        onSourceClick={message.role === 'assistant' ? onSourceClick : undefined}
       />
     ));
-  }, [messages, selectedAssistantMessageId, handleAssistantMessageSelect]);
+  }, [
+    messages,
+    selectedAssistantMessageId,
+    handleAssistantMessageSelect,
+    onSourceClick,
+  ]);
 
   return (
     <Card
@@ -104,10 +268,6 @@ export function ChatWindow({
           <HStack justify='flex-end' gap='3' wrap='wrap'>
             <HStack gap='2'>
               <MetaChip label='messages' value={String(messages.length)} />
-              <MetaChip
-                label='status'
-                value={loading ? 'streaming' : 'ready'}
-              />
             </HStack>
           </HStack>
 
@@ -156,22 +316,25 @@ export function ChatWindow({
             <MessageBubble role='user' content={pendingQuestion} />
           ) : null}
 
-          {streamingAnswer ? (
-            <MessageBubble role='assistant' content={streamingAnswer} />
+          {loading ? (
+            <MessageBubble
+              role='assistant'
+              content={streamingAnswer || streamingResponse?.answer || ''}
+              confidenceScore={streamingResponse?.confidence_score ?? null}
+              citationCoverageStatus={
+                streamingResponse?.citation_coverage_status ?? null
+              }
+              contradictionWarnings={
+                streamingResponse?.contradiction_warnings ?? []
+              }
+              knowledgeGaps={streamingResponse?.knowledge_gaps ?? []}
+              answerSections={streamingResponse?.answer_sections ?? []}
+              evidenceItems={streamingResponse?.sources ?? []}
+              statusPill={currentStatusPill}
+              thinking
+              onSourceClick={onSourceClick}
+            />
           ) : null}
-
-          {loading && !streamingAnswer && (
-            <Flex direction='column' gap='4'>
-              <Box
-                bg='slate.800'
-                h='10'
-                w='full'
-                borderRadius='2xl'
-                borderTopLeftRadius='0'
-              />
-              <Spinner size='sm' color='brand.500' />
-            </Flex>
-          )}
         </Stack>
       </Box>
 
@@ -209,7 +372,7 @@ export function ChatWindow({
               color='white'
               _hover={{ bg: 'signal.400' }}
             >
-              {loading ? <Spinner size='xs' /> : <Send size={16} />}
+              <Send size={16} />
             </IconButton>
           </Flex>
         </form>

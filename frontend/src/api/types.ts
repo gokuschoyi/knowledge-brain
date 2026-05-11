@@ -36,6 +36,8 @@ export type DocumentSummary = {
   chunks_count: number;
   brain_name?: string;
   latest_job_status?: string | null;
+  raw_file_url?: string | null;
+  file_extension?: string | null;
 };
 
 export type IngestionLogEntry = {
@@ -174,11 +176,81 @@ export type DocumentRelationship = Pick<
 >;
 
 export type ChatSource = {
+  evidence_span_id?: number;
   document_id: number;
   document_title: string;
-  chunk_id: number;
-  snippet: string;
+  chunk_id?: number;
+  snippet?: string;
+  quote_text?: string;
+  review_status?: string | null;
   score?: number;
+  source_type?: 'text' | 'file' | 'url';
+  file_extension?: string | null;
+  page_number?: number | null;
+  start_char?: number | null;
+  end_char?: number | null;
+  locator_type?: string | null;
+  locator_payload?: JsonValue;
+  raw_file_url?: string | null;
+  location_label?: string | null;
+};
+
+export type CitationCoverageStatus =
+  | 'well_supported'
+  | 'partially_supported'
+  | 'needs_verification';
+
+export type ChatAnswerSection = {
+  content: string;
+  citation_numbers: number[];
+};
+
+export type EvidenceSpan = {
+  id: number;
+  document: number;
+  document_title: string;
+  chunk: number;
+  chat_message: number | null;
+  quote_text: string;
+  span_start_char: number;
+  span_end_char: number;
+  primary_locator_type: string;
+  locator_payload: { [key: string]: JsonValue };
+  created_from: string;
+  review_status: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+  source_type: 'text' | 'file' | 'url';
+  raw_file_url?: string | null;
+  file_extension?: string | null;
+};
+
+export type EvidenceSpanRenderContext = {
+  evidence_span: EvidenceSpan;
+  document: {
+    id: number;
+    title: string;
+    source_type: 'text' | 'file' | 'url';
+    file_extension?: string | null;
+    text: string;
+    structure_metadata: { [key: string]: JsonValue };
+    raw_file_url?: string | null;
+  };
+  locator_type: string;
+  locator_payload: { [key: string]: JsonValue };
+  word_records: Array<{
+    id: number;
+    page_number: number;
+    text: string;
+    start_char: number;
+    end_char: number;
+    bbox: JsonValue;
+    reading_order: number;
+    block_index: number;
+    line_index: number;
+    extraction_source: string;
+  }>;
 };
 
 export type ChatRelatedEntity = {
@@ -191,13 +263,17 @@ export type ChatResponse = {
   session_id: number;
   answer: string;
   confidence_score: number;
-  llm_provider?: string;
-  llm_model?: string;
+  intent?: string;
+  support_summary?: string;
   sources: ChatSource[];
   related_entities: ChatRelatedEntity[];
   knowledge_gaps: string[];
+  contradiction_warnings?: string[];
+  citation_coverage_status?: CitationCoverageStatus;
+  valid_citation_count?: number;
+  rejected_citation_count?: number;
+  answer_sections?: ChatAnswerSection[];
   self_healing_task_created: boolean;
-  should_create_self_healing_task?: boolean;
 };
 
 export type ChatMessage = {

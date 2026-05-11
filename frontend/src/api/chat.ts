@@ -2,13 +2,22 @@ import { apiFetch, API_BASE_URL } from './client';
 import type { ChatResponse, ChatSession } from './types';
 
 export type ChatStreamEvent =
-  | { type: 'status'; message: string }
+  | {
+      type: 'status';
+      stage:
+        | 'searching_knowledge'
+        | 'generating_answer'
+        | 'grounding_citations'
+        | 'saving_response';
+      label: string;
+    }
   | {
       type: 'context';
       payload: Pick<ChatResponse, 'confidence_score' | 'knowledge_gaps'>;
     }
   | { type: 'token'; delta: string }
-  | { type: 'final'; payload: ChatResponse }
+  | { type: 'citations'; payload: ChatResponse }
+  | { type: 'complete'; payload: Pick<ChatResponse, 'session_id'> }
   | { type: 'error'; message: string };
 
 export async function queryChatStreaming(
