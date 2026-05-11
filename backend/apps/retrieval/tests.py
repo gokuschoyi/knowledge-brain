@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.test import TestCase
 
-from apps.agents.retrieval_agent import run_retrieval_state
+from apps.agents.retrieval_agent import persist_retrieval_result, run_retrieval_state
 from apps.core.models import Brain
 from apps.core.utils import deterministic_embedding
 from apps.documents.models import Chunk, Document
@@ -185,3 +185,85 @@ class RetrievalImprovementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         task_ids = [item["id"] for item in response.json()]
         self.assertIn(task.id, task_ids)
+
+    def test_persist_retrieval_result_only_keeps_validated_citations(self):
+        document, chunk = self._create_document(
+            "Pricing FAQ",
+            "The Pro plan costs $49 per month and includes priority support.",
+        )
+        chunk.metadata = {"start_char": 0}
+        chunk.save(update_fields=["metadata"])
+
+        payload = persist_retrieval_result(
+            {
+                "question": "What is the pro plan price?",
+                "contextual_question": "What is the pro plan price?",
+                "intent": "precision",
+                "brain_id": self.brain.id,
+                "top_chunks": [chunk],
+                "graph_context": {
+                    "entities": [],
+                    "relationships": [],
+                    "claims": [],
+                    "contradiction_warnings": [],
+                },
+                "session_context": {"summary": ""},
+                "answer_payload": {},
+            },
+            {
+                "answer_markdown": "The Pro plan costs $49 per month.",
+                "confidence_score": 0.91,
+                "grounded_citations": [{"chunk_id": chunk.id, "quote_text": "costs $49 per month"}],
+                "answer_sections": [{"content": "The Pro plan costs $49 per month.", "chunk_ids": [chunk.id]}],
+                "source_chunk_ids": [chunk.id],
+                "related_entity_ids": [],
+                "knowledge_gaps": [],
+                "should_create_self_healing_task": False,
+            },
+        )
+
+        self.assertEqual(len(payload["sources"]), 1)
+        self.assertEqual(payload["valid_citation_count"], 1)
+        self.assertEqual(payload["rejected_citation_count"], 0)
+        self.assertEqual(payload["citation_coverage_status"], "well_supported")
+
+    def test_persist_retrieval_result_rejects_unresolved_citations(self):
+        _document, chunk = self._create_document(
+            "Pricing FAQ",
+            "The Pro plan costs $49 per month and includes priority support.",
+        )
+        chunk.metadata = {"start_char": 0}
+        chunk.save(update_fields=["metadata"])
+
+        payload = persist_retrieval_result(
+            {
+                "question": "What is the pro plan price?",
+                "contextual_question": "What is the pro plan price?",
+                "intent": "precision",
+                "brain_id": self.brain.id,
+                "top_chunks": [chunk],
+                "graph_context": {
+                    "entities": [],
+                    "relationships": [],
+                    "claims": [],
+                    "contradiction_warnings": [],
+                },
+                "session_context": {"summary": ""},
+                "answer_payload": {},
+            },
+            {
+                "answer_markdown": "The Pro plan costs $49 per month.",
+                "confidence_score": 0.91,
+                "grounded_citations": [{"chunk_id": chunk.id, "quote_text": "The price is $88 monthly"}],
+                "answer_sections": [],
+                "source_chunk_ids": [chunk.id],
+                "related_entity_ids": [],
+                "knowledge_gaps": [],
+                "should_create_self_healing_task": False,
+            },
+        )
+
+        self.assertEqual(payload["sources"], [])
+        self.assertEqual(payload["valid_citation_count"], 0)
+        self.assertEqual(payload["rejected_citation_count"], 1)
+        self.assertEqual(payload["citation_coverage_status"], "needs_verification")

@@ -9,8 +9,17 @@ AUTHORITY_BOOST = {
     "unknown": 0.0,
 }
 
+# content_type → intent → boost applied when chunk type matches query intent
+_CONTENT_TYPE_INTENT_BOOST: dict[str, dict[str, float]] = {
+    "definition": {"definition": 0.12},
+    "data_statistics": {"precision": 0.10},
+    "procedure": {"precision": 0.06},
+    "example": {"definition": 0.04, "general": 0.03},
+    "argument": {"general": 0.04},
+}
 
-def rerank_results(results: list[dict]) -> list[dict]:
+
+def rerank_results(results: list[dict], intent: str | None = None) -> list[dict]:
     def composite_score(item: dict) -> float:
         chunk = item["chunk"]
         document_quality = getattr(chunk.document, "quality_score", 0.0)
@@ -33,6 +42,20 @@ def rerank_results(results: list[dict]) -> list[dict]:
         if published_at is not None:
             age_days = max(0, (timezone.now() - published_at).days)
             freshness_boost = max(0.0, 0.05 - min(0.05, age_days / 3650))
+
+        # Boost chunks whose content_type matches the query intent
+        content_type_boost = 0.0
+        chunk_content_type = getattr(chunk, "content_type", None)
+        if intent and chunk_content_type:
+            content_type_boost = _CONTENT_TYPE_INTENT_BOOST.get(chunk_content_type, {}).get(intent, 0.0)
+
+        # Penalise hedged language for precision queries
+        certainty_penalty = 0.0
+        if intent == "precision":
+            certainty_level = getattr(chunk, "certainty_level", None)
+            if certainty_level is not None:
+                certainty_penalty = (1.0 - float(certainty_level)) * 0.08
+
         return (
             (vector_score * 0.55)
             + (lexical_score * 0.2)
@@ -43,6 +66,8 @@ def rerank_results(results: list[dict]) -> list[dict]:
             + freshness_boost
             + preferred_boost
             + entity_boost
+            + content_type_boost
+            - certainty_penalty
         )
 
     reranked = sorted(
