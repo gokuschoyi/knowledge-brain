@@ -128,6 +128,8 @@ class DocumentSerializer(serializers.ModelSerializer):
     brain_name = serializers.CharField(source="brain.name", read_only=True)
     latest_job_status = serializers.SerializerMethodField()
     latest_activity_at = serializers.DateTimeField(source="updated_at", read_only=True)
+    raw_file_url = serializers.SerializerMethodField()
+    file_extension = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
@@ -154,11 +156,26 @@ class DocumentSerializer(serializers.ModelSerializer):
             "chunks_count",
             "brain_name",
             "latest_job_status",
+            "raw_file_url",
+            "file_extension",
         ]
 
     def get_latest_job_status(self, obj):
         latest_job = obj.ingestion_jobs.order_by("-created_at").first()
         return latest_job.status if latest_job else None
+
+    def get_raw_file_url(self, obj):
+        if obj.raw_file:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.raw_file.url)
+            return obj.raw_file.url
+        return None
+
+    def get_file_extension(self, obj):
+        if obj.raw_file:
+            return Path(obj.raw_file.name).suffix.lstrip(".").lower()
+        return None
 
 
 class IngestionJobSerializer(serializers.ModelSerializer):

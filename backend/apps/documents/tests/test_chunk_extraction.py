@@ -120,10 +120,11 @@ class BundledExtractionPayloadTests(SimpleTestCase):
         _mock_prompt,
     ):
         payload = extract_bundled_payload("hello", "Doc", chunk_id=1, document_id=1)
-        self.assertEqual(
-            payload,
-            {"entities": [], "claims": [], "relationships": []},
-        )
+        self.assertEqual(payload["entities"], [])
+        self.assertEqual(payload["claims"], [])
+        self.assertEqual(payload["relationships"], [])
+        self.assertIn("content_type", payload)
+        self.assertIn("certainty_level", payload)
 
     @patch(
         "apps.knowledge.services.bundled_extraction.verify_empty_bundled_payload",
