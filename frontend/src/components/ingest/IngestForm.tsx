@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 
 import { ModelCatalog } from '../../api/models';
-import type { DocumentIngestResponse } from '../../api/types';
 import { Button } from '../common/Button';
 import { Card } from '../common/Card';
 
@@ -67,9 +66,10 @@ export function IngestForm({
 
   useEffect(() => {
     if (files.length === 1 && !title) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTitle(files[0].name.replace(/\.[^.]+$/, ''));
     }
-  }, [files]);
+  }, [files, title]);
 
   const handleReset = () => {
     setTitle('');
@@ -85,6 +85,8 @@ export function IngestForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!activeBrainId || !provider || !model) return;
+    const batchToken =
+      sourceType === 'file' && files.length > 1 ? crypto.randomUUID() : '';
 
     const buildBase = (fileTitle: string) => {
       const fd = new FormData();
@@ -94,8 +96,14 @@ export function IngestForm({
       fd.append('llm_provider', provider);
       fd.append('llm_model', model);
       fd.append('source_authority', sourceAuthority);
+      if (batchToken) {
+        fd.append('batch_token', batchToken);
+      }
       if (sourcePublishedAt) {
-        fd.append('source_published_at', new Date(sourcePublishedAt).toISOString());
+        fd.append(
+          'source_published_at',
+          new Date(sourcePublishedAt).toISOString(),
+        );
       }
       return fd;
     };
@@ -103,7 +111,9 @@ export function IngestForm({
     let formDataList: FormData[];
     if (sourceType === 'file' && files.length > 0) {
       formDataList = files.map((f) => {
-        const fd = buildBase(files.length === 1 ? title : f.name.replace(/\.[^.]+$/, ''));
+        const fd = buildBase(
+          files.length === 1 ? title : f.name.replace(/\.[^.]+$/, ''),
+        );
         fd.append('raw_file', f);
         return fd;
       });
@@ -404,13 +414,17 @@ export function IngestForm({
                 ) : (
                   <Field.Root invalid={files.length === 0} w='full'>
                     <Field.Label color='slate.300'>
-                      {files.length > 1 ? `Files (${files.length} selected)` : 'File'}
+                      {files.length > 1
+                        ? `Files (${files.length} selected)`
+                        : 'File'}
                     </Field.Label>
                     <FileUpload.Root
                       maxFiles={10}
                       accept='.pdf,.txt,.md,.docx,.xlsx,.csv,.pptx'
                       acceptedFiles={files}
-                      onFileChange={(details) => setFiles(details.acceptedFiles)}
+                      onFileChange={(details) =>
+                        setFiles(details.acceptedFiles)
+                      }
                       w='full'
                     >
                       <FileUpload.HiddenInput />
@@ -495,8 +509,10 @@ export function IngestForm({
                       !model ||
                       (sourceType === 'file' && files.length === 0) ||
                       (sourceType === 'file' && files.length === 1 && !title) ||
-                      ((sourceType === 'url' || sourceType === 'text') && !title) ||
-                      ((sourceType === 'url' || sourceType === 'text') && !url) ||
+                      ((sourceType === 'url' || sourceType === 'text') &&
+                        !title) ||
+                      ((sourceType === 'url' || sourceType === 'text') &&
+                        !url) ||
                       ingestionActive
                     }
                   >
