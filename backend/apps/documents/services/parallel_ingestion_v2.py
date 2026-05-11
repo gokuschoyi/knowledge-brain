@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 import logging
@@ -10,7 +11,7 @@ from django.db.models import Count
 from django.utils import timezone
 
 from apps.core.utils import deterministic_embedding, normalise_name
-from apps.documents.models import Chunk, ChunkExtractionArtifact, Document, IngestionJob
+from apps.documents.models import Chunk, ChunkExtractionArtifact, Document, DocumentWord, IngestionJob
 from apps.documents.services.confidence_calibration import (
     DEFAULT_CLAIM_CONFIDENCE,
     DEFAULT_ENTITY_CONFIDENCE,
@@ -26,7 +27,6 @@ from apps.documents.services.confidence_calibration import (
 from apps.documents.services.chunking import chunk_text
 from apps.documents.services.document_cleanup import clear_document_knowledge
 from apps.documents.services.ingestion_progress import append_warning, ensure_stage_metadata, set_stage_status
-from apps.documents.services.text_cleaning import clean_text
 from apps.documents.services.text_extraction import extract_text
 from apps.knowledge.models import Claim, ChunkEntityMention, Entity, Relationship
 from apps.knowledge.services.bundled_extraction import (
@@ -52,6 +52,9 @@ from apps.self_healing.services.post_ingestion_repair import (
 from apps.self_healing.services.task_generator import generate_tasks_for_document
 
 logger = logging.getLogger(__name__)
+
+_YEAR_RE = re.compile(r"\b(19|20)\d{2}\b")
+_QUARTER_RE = re.compile(r"\bQ[1-4]\s*(19|20)\d{2}\b", re.IGNORECASE)
 
 
 @dataclass
@@ -332,12 +335,22 @@ def _persist_consolidated_knowledge(
         entity_map[consolidated.key] = entity
 
         for chunk_id, mention in consolidated.mentions_by_chunk.items():
+            mention_text = mention["mention_text"]
+            try:
+                chunk_obj = Chunk.objects.get(id=chunk_id)
+                pos = chunk_obj.text.lower().find(mention_text.lower())
+                start_char = pos if pos != -1 else None
+                end_char = (pos + len(mention_text)) if pos != -1 else None
+            except Chunk.DoesNotExist:
+                start_char = end_char = None
             ChunkEntityMention.objects.get_or_create(
                 chunk_id=chunk_id,
                 entity=entity,
                 defaults={
-                    "mention_text": mention["mention_text"],
+                    "mention_text": mention_text,
                     "confidence": mention["confidence"],
+                    "start_char": start_char,
+                    "end_char": end_char,
                 },
             )
 
@@ -432,7 +445,12 @@ def run_parallel_v2_ingestion(document_id: int, job_id: int) -> None:
     set_stage_status(
         job, "extracting_text", "running", "Extracting text", progress=10, status=IngestionJob.STATUS_PROCESSING
     )
-    raw_text = extract_text(document)
+    extraction_result = extract_text(document)
+    raw_text = extraction_result["text"]
+    page_boundaries = extraction_result["page_boundaries"]
+    doc_headings = extraction_result["headings"]
+    structure_metadata = extraction_result.get("structure_metadata", {}) or {}
+    document_words = extraction_result.get("document_words", [])
     if not raw_text.strip():
         source_hint = "uploaded file"
         if document.source_type == Document.SOURCE_URL:
@@ -446,9 +464,11 @@ def run_parallel_v2_ingestion(document_id: int, job_id: int) -> None:
     set_stage_status(job, "extracting_text", "completed", f"Extracted {len(raw_text)} characters", progress=15)
 
     set_stage_status(job, "cleaning_text", "running", "Cleaning extracted text", progress=20)
-    cleaned_text = clean_text(raw_text)
+    cleaned_text = raw_text
     document.raw_text = cleaned_text
-    document.save(update_fields=["raw_text", "updated_at"])
+    document.extracted_text = cleaned_text
+    document.structure_metadata = structure_metadata
+    document.save(update_fields=["raw_text", "extracted_text", "structure_metadata", "updated_at"])
     set_stage_status(job, "cleaning_text", "completed", f"Prepared {len(cleaned_text)} characters", progress=25)
 
     set_stage_status(job, "chunking", "running", "Creating chunks", progress=30)
@@ -460,10 +480,101 @@ def run_parallel_v2_ingestion(document_id: int, job_id: int) -> None:
     set_stage_status(job, "persisting_chunks", "running", "Persisting chunks and embeddings", progress=40)
     ChunkExtractionArtifact.objects.filter(ingestion_job=job).delete()
     document.chunks.all().delete()
+    document.document_words.all().delete()
+    if document_words:
+        DocumentWord.objects.bulk_create(
+            [
+                DocumentWord(
+                    document=document,
+                    page_number=word["page"],
+                    text=word["text"][:255],
+                    start_char=word["start"],
+                    end_char=word["end"],
+                    bbox=word["bbox"],
+                    block_index=word.get("block_index", 0),
+                    line_index=word.get("line_index", 0),
+                    reading_order=word.get("reading_order", 0),
+                    extraction_source=word.get("extraction_source", DocumentWord.EXTRACTION_NATIVE_PDF),
+                )
+                for word in document_words
+            ]
+        )
     created_chunks: list[Chunk] = []
+    paragraphs = structure_metadata.get("paragraphs", [])
+    slides = structure_metadata.get("slides", [])
+    slide_text_ranges = structure_metadata.get("slide_text_ranges", [])
+    sheet_rows = structure_metadata.get("sheet_rows", [])
     for index, chunk_data in enumerate(chunks_data):
         text = chunk_data["text"]
         embedding, embedding_metadata = embed_text(text, input_type="document")
+        chunk_start = chunk_data.get("start_char", 0)
+        chunk_end = chunk_data.get("end_char", chunk_start + len(text))
+
+        # Resolve page number from PDF page boundaries
+        page_number = None
+        if page_boundaries:
+            for pb in page_boundaries:
+                if pb["start_char"] <= chunk_start < pb["end_char"] or pb["start_char"] == chunk_start:
+                    page_number = pb["page"]
+                    break
+
+        # Find nearest preceding section heading
+        section_heading = None
+        section_level = None
+        if doc_headings:
+            for h in reversed(doc_headings):
+                if h["start_char"] <= chunk_start:
+                    section_heading = h["heading"]
+                    section_level = h["level"]
+                    break
+
+        # Extract temporal markers via regex
+        temporal_refs = list(dict.fromkeys(
+            [m.group() for m in _YEAR_RE.finditer(text)] + [m.group() for m in _QUARTER_RE.finditer(text)]
+        ))
+        most_recent_year = max((int(m.group()) for m in _YEAR_RE.finditer(text)), default=None)
+
+        chunk_meta: dict = {
+            "source_type": document.source_type,
+            "start_char": chunk_start,
+            "end_char": chunk_end,
+            **embedding_metadata,
+        }
+        if page_number is not None:
+            chunk_meta["page_number"] = page_number
+        if section_heading is not None:
+            chunk_meta["section_heading"] = section_heading
+            chunk_meta["section_level"] = section_level
+        if temporal_refs:
+            chunk_meta["temporal_references"] = temporal_refs
+        if most_recent_year is not None:
+            chunk_meta["most_recent_year"] = most_recent_year
+        if paragraphs:
+            overlapping_paragraphs = [
+                paragraph for paragraph in paragraphs if paragraph["end_char"] > chunk_start and paragraph["start_char"] < chunk_end
+            ]
+            if overlapping_paragraphs:
+                chunk_meta["paragraph_start_index"] = overlapping_paragraphs[0]["index"]
+                chunk_meta["paragraph_end_index"] = overlapping_paragraphs[-1]["index"]
+        if slides:
+            overlapping_slides = [slide for slide in slides if slide["end_char"] > chunk_start and slide["start_char"] < chunk_end]
+            if overlapping_slides:
+                chunk_meta["slide_number"] = overlapping_slides[0]["slide_number"]
+        if slide_text_ranges:
+            overlapping_shapes = [
+                item for item in slide_text_ranges if item["end_char"] > chunk_start and item["start_char"] < chunk_end
+            ]
+            if overlapping_shapes and overlapping_shapes[0].get("shape_index") is not None:
+                chunk_meta["shape_index"] = overlapping_shapes[0]["shape_index"]
+        if sheet_rows:
+            overlapping_rows = [row for row in sheet_rows if row["end_char"] > chunk_start and row["start_char"] < chunk_end]
+            if overlapping_rows:
+                chunk_meta["sheet_name"] = overlapping_rows[0]["sheet_name"]
+                chunk_meta["row_start"] = overlapping_rows[0]["row_start"]
+                chunk_meta["row_end"] = overlapping_rows[-1]["row_end"]
+                chunk_meta["column_start"] = min(row["column_start"] for row in overlapping_rows)
+                chunk_meta["column_end"] = max(row["column_end"] for row in overlapping_rows)
+
         chunk = Chunk.objects.create(
             document=document,
             text=text,
@@ -472,7 +583,7 @@ def run_parallel_v2_ingestion(document_id: int, job_id: int) -> None:
             token_count=chunk_data["token_count"],
             embedding=embedding,
             importance_score=min(1.0, chunk_data["token_count"] / 1200),
-            metadata={"source_type": document.source_type, **embedding_metadata},
+            metadata=chunk_meta,
         )
         chunk.quality_score = score_chunk_quality(chunk)
         chunk.save(update_fields=["quality_score"])
@@ -595,6 +706,17 @@ def run_chunk_bundled_extraction_for_artifact(artifact_id: int) -> None:
                 "updated_at",
             ]
         )
+        # Persist content_type and certainty_level from extraction to Chunk
+        chunk_update_fields = []
+        if payload.get("content_type"):
+            artifact.chunk.content_type = payload["content_type"]
+            chunk_update_fields.append("content_type")
+        certainty = payload.get("certainty_level")
+        if certainty is not None:
+            artifact.chunk.certainty_level = float(certainty)
+            chunk_update_fields.append("certainty_level")
+        if chunk_update_fields:
+            artifact.chunk.save(update_fields=chunk_update_fields)
     except EmptyExtractionVerificationError as exc:
         artifact.payload = {}
         artifact.status = ChunkExtractionArtifact.STATUS_FAILED
