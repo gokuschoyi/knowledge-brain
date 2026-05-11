@@ -6,8 +6,8 @@ import { getBrains } from '../api/brains';
 import { listDocuments } from '../api/documents';
 import { ChatWindow } from '../components/chat/ChatWindow';
 import { ChatHistorySidebar } from '../components/chat/ChatHistorySidebar';
-import { SourcePanel } from '../components/chat/SourcePanel';
-import { KnowledgeGapPanel } from '../components/chat/KnowledgeGapPanel';
+import { AnswerProofPanel } from '../components/chat/AnswerProofPanel';
+import { SourceDrawer } from '../components/chat/SourceDrawer';
 import { LoadingState } from '../components/common/LoadingState';
 import { Card } from '../components/common/Card';
 import { useActiveBrain } from '../context/useActiveBrain';
@@ -17,9 +17,11 @@ import {
   queryChatStreaming,
 } from '../api/chat';
 import type {
+  ChatAnswerSection,
   ChatMessage,
   ChatResponse,
   ChatSource,
+  CitationCoverageStatus,
   JsonValue,
 } from '../api/types';
 
@@ -37,12 +39,19 @@ function readSourcesFromMessage(message: ChatMessage | null): ChatSource[] {
     const documentTitle = source.document_title;
     const chunkId = source.chunk_id;
     const snippet = source.snippet;
+    const quoteText = source.quote_text;
+    const evidenceSpanId = source.evidence_span_id;
+    const fallbackText =
+      typeof quoteText === 'string'
+        ? quoteText
+        : typeof snippet === 'string'
+          ? snippet
+          : null;
 
     if (
       typeof documentId !== 'number' ||
       typeof documentTitle !== 'string' ||
-      typeof chunkId !== 'number' ||
-      typeof snippet !== 'string'
+      fallbackText === null
     ) {
       return [];
     }
@@ -51,8 +60,25 @@ function readSourcesFromMessage(message: ChatMessage | null): ChatSource[] {
       {
         document_id: documentId,
         document_title: documentTitle,
-        chunk_id: chunkId,
-        snippet,
+        chunk_id: typeof chunkId === 'number' ? chunkId : undefined,
+        evidence_span_id:
+          typeof evidenceSpanId === 'number' ? evidenceSpanId : undefined,
+        snippet: typeof snippet === 'string' ? snippet : undefined,
+        quote_text: fallbackText,
+        review_status:
+          typeof source.review_status === 'string'
+            ? source.review_status
+            : null,
+        file_extension:
+          typeof source.file_extension === 'string'
+            ? source.file_extension
+            : null,
+        page_number:
+          typeof source.page_number === 'number' ? source.page_number : null,
+        location_label:
+          typeof source.location_label === 'string'
+            ? source.location_label
+            : null,
       },
     ];
   });
@@ -67,6 +93,100 @@ function readKnowledgeGapsFromMessage(message: ChatMessage | null): string[] {
   return gaps.filter((gap): gap is string => typeof gap === 'string');
 }
 
+function readContradictionWarningsFromMessage(
+  message: ChatMessage | null,
+): string[] {
+  if (!message) return [];
+
+  const warnings = message.metadata.contradiction_warnings;
+  if (!Array.isArray(warnings)) return [];
+
+  return warnings.filter(
+    (warning): warning is string => typeof warning === 'string',
+  );
+}
+
+function readIntentFromMessage(message: ChatMessage | null): string | null {
+  if (!message) return null;
+  return typeof message.metadata.intent === 'string'
+    ? message.metadata.intent
+    : null;
+}
+
+function readSupportSummaryFromMessage(
+  message: ChatMessage | null,
+): string | null {
+  if (!message) return null;
+  return typeof message.metadata.support_summary === 'string'
+    ? message.metadata.support_summary
+    : null;
+}
+
+function readCitationCoverageStatusFromMessage(
+  message: ChatMessage | null,
+): CitationCoverageStatus | null {
+  if (!message) return null;
+  const status = message.metadata.citation_coverage_status;
+  return status === 'well_supported' ||
+    status === 'partially_supported' ||
+    status === 'needs_verification'
+    ? status
+    : null;
+}
+
+function readNumberMetadata(
+  message: ChatMessage | null,
+  key: 'valid_citation_count' | 'rejected_citation_count',
+): number | null {
+  if (!message) return null;
+  const value = message.metadata[key];
+  return typeof value === 'number' ? value : null;
+}
+
+function readAnswerSectionsFromMessage(
+  message: ChatMessage | null,
+): ChatAnswerSection[] {
+  if (!message) return [];
+  const sections = message.metadata.answer_sections;
+  if (!Array.isArray(sections)) return [];
+  return sections.flatMap((section) => {
+    if (!isJsonObject(section)) return [];
+    const content = section.content;
+    const citationNumbers = section.citation_numbers;
+    if (typeof content !== 'string' || !Array.isArray(citationNumbers)) {
+      return [];
+    }
+    const validCitationNumbers = citationNumbers.filter(
+      (value): value is number => typeof value === 'number',
+    );
+    return [{ content, citation_numbers: validCitationNumbers }];
+  });
+}
+
+function readRelatedEntitiesFromMessage(
+  message: ChatMessage | null,
+): ChatResponse['related_entities'] {
+  if (!message) return [];
+
+  const entities = message.metadata.related_entities;
+  if (!Array.isArray(entities)) return [];
+
+  return entities.flatMap((entity) => {
+    if (!isJsonObject(entity)) return [];
+    const id = entity.id;
+    const name = entity.name;
+    const type = entity.type;
+    if (
+      typeof id !== 'number' ||
+      typeof name !== 'string' ||
+      typeof type !== 'string'
+    ) {
+      return [];
+    }
+    return [{ id, name, type }];
+  });
+}
+
 type ChatUiState = {
   brainId: string;
   activeSessionId: number | null;
@@ -75,6 +195,13 @@ type ChatUiState = {
   latestResponse: ChatResponse | null;
   pendingQuestion: string | null;
   streamingAnswer: string;
+  streamingResponse: ChatResponse | null;
+  streamingStage:
+    | 'searching_knowledge'
+    | 'generating_answer'
+    | 'grounding_citations'
+    | 'saving_response'
+    | null;
   loading: boolean;
 };
 
@@ -87,6 +214,8 @@ function createChatUiState(brainId: string): ChatUiState {
     latestResponse: null,
     pendingQuestion: null,
     streamingAnswer: '',
+    streamingResponse: null,
+    streamingStage: null,
     loading: false,
   };
 }
@@ -96,6 +225,7 @@ export function ChatPage() {
   const [uiState, setUiState] = useState<ChatUiState>(() =>
     createChatUiState(activeBrainId),
   );
+  const [drawerSource, setDrawerSource] = useState<ChatSource | null>(null);
   const queryClient = useQueryClient();
   const scopedUiState =
     uiState.brainId === activeBrainId
@@ -161,6 +291,88 @@ export function ChatPage() {
         : readKnowledgeGapsFromMessage(selectedAssistantMessage),
     [activeSessionId, scopedUiState.latestResponse, selectedAssistantMessage],
   );
+  const contradictionWarnings = useMemo(
+    () =>
+      scopedUiState.latestResponse?.session_id === activeSessionId &&
+      selectedAssistantMessage === null
+        ? (scopedUiState.latestResponse.contradiction_warnings ?? [])
+        : readContradictionWarningsFromMessage(selectedAssistantMessage),
+    [activeSessionId, scopedUiState.latestResponse, selectedAssistantMessage],
+  );
+  const answerIntent = useMemo(
+    () =>
+      scopedUiState.latestResponse?.session_id === activeSessionId &&
+      selectedAssistantMessage === null
+        ? (scopedUiState.latestResponse.intent ?? null)
+        : readIntentFromMessage(selectedAssistantMessage),
+    [activeSessionId, scopedUiState.latestResponse, selectedAssistantMessage],
+  );
+  const supportSummary = useMemo(
+    () =>
+      scopedUiState.latestResponse?.session_id === activeSessionId &&
+      selectedAssistantMessage === null
+        ? (scopedUiState.latestResponse.support_summary ?? null)
+        : readSupportSummaryFromMessage(selectedAssistantMessage),
+    [activeSessionId, scopedUiState.latestResponse, selectedAssistantMessage],
+  );
+  const relatedEntities = useMemo(
+    () =>
+      scopedUiState.latestResponse?.session_id === activeSessionId &&
+      selectedAssistantMessage === null
+        ? scopedUiState.latestResponse.related_entities
+        : readRelatedEntitiesFromMessage(selectedAssistantMessage),
+    [activeSessionId, scopedUiState.latestResponse, selectedAssistantMessage],
+  );
+  const citationCoverageStatus = useMemo(
+    () =>
+      scopedUiState.latestResponse?.session_id === activeSessionId &&
+      selectedAssistantMessage === null
+        ? (scopedUiState.latestResponse.citation_coverage_status ?? null)
+        : readCitationCoverageStatusFromMessage(selectedAssistantMessage),
+    [activeSessionId, scopedUiState.latestResponse, selectedAssistantMessage],
+  );
+  const validCitationCount = useMemo(
+    () =>
+      scopedUiState.latestResponse?.session_id === activeSessionId &&
+      selectedAssistantMessage === null
+        ? (scopedUiState.latestResponse.valid_citation_count ?? null)
+        : readNumberMetadata(selectedAssistantMessage, 'valid_citation_count'),
+    [activeSessionId, scopedUiState.latestResponse, selectedAssistantMessage],
+  );
+  const rejectedCitationCount = useMemo(
+    () =>
+      scopedUiState.latestResponse?.session_id === activeSessionId &&
+      selectedAssistantMessage === null
+        ? (scopedUiState.latestResponse.rejected_citation_count ?? null)
+        : readNumberMetadata(
+            selectedAssistantMessage,
+            'rejected_citation_count',
+          ),
+    [activeSessionId, scopedUiState.latestResponse, selectedAssistantMessage],
+  );
+  const answerSections = useMemo(
+    () =>
+      scopedUiState.latestResponse?.session_id === activeSessionId &&
+      selectedAssistantMessage === null
+        ? (scopedUiState.latestResponse.answer_sections ?? [])
+        : readAnswerSectionsFromMessage(selectedAssistantMessage),
+    [activeSessionId, scopedUiState.latestResponse, selectedAssistantMessage],
+  );
+  const proofConfidenceScore =
+    scopedUiState.latestResponse?.session_id === activeSessionId &&
+    selectedAssistantMessage === null
+      ? scopedUiState.latestResponse.confidence_score
+      : (selectedAssistantMessage?.confidence_score ?? null);
+  const shouldShowProofPanel =
+    proofConfidenceScore != null ||
+    !!supportSummary ||
+    !!answerIntent ||
+    !!analysisGaps.length ||
+    !!contradictionWarnings.length ||
+    !!relatedEntities.length ||
+    !!analysisSources.length ||
+    !!citationCoverageStatus ||
+    !!answerSections.length;
 
   async function handleChat(question: string) {
     if (!activeBrainId) return;
@@ -175,9 +387,12 @@ export function ChatPage() {
         loading: true,
         pendingQuestion: question,
         streamingAnswer: '',
+        streamingResponse: null,
+        streamingStage: 'searching_knowledge',
       };
     });
     let nextSessionId = activeSessionId;
+    let didComplete = false;
     try {
       await queryChatStreaming(
         question,
@@ -185,6 +400,19 @@ export function ChatPage() {
         activeBrainId,
         (event) => {
           switch (event.type) {
+            case 'status':
+              setUiState((current) => {
+                const nextState =
+                  current.brainId === activeBrainId
+                    ? current
+                    : createChatUiState(activeBrainId);
+                return {
+                  ...nextState,
+                  brainId: activeBrainId,
+                  streamingStage: event.stage,
+                };
+              });
+              return;
             case 'token':
               setUiState((current) => {
                 const nextState =
@@ -195,10 +423,12 @@ export function ChatPage() {
                   ...nextState,
                   brainId: activeBrainId,
                   streamingAnswer: nextState.streamingAnswer + event.delta,
+                  streamingStage:
+                    nextState.streamingStage ?? 'generating_answer',
                 };
               });
               return;
-            case 'final':
+            case 'citations':
               nextSessionId = event.payload.session_id;
               setUiState((current) => ({
                 ...(current.brainId === activeBrainId
@@ -209,10 +439,35 @@ export function ChatPage() {
                 isStartingNewChat: false,
                 selectedAssistantMessageId: null,
                 latestResponse: event.payload,
-                streamingAnswer: '',
+                streamingResponse: event.payload,
+                streamingStage: 'saving_response',
               }));
               queryClient.invalidateQueries({
                 queryKey: ['chat-sessions', activeBrainId],
+              });
+              return;
+            case 'complete':
+              didComplete = true;
+              nextSessionId = event.payload.session_id;
+              setUiState((current) => {
+                const nextState =
+                  current.brainId === activeBrainId
+                    ? current
+                    : createChatUiState(activeBrainId);
+                return {
+                  ...nextState,
+                  brainId: activeBrainId,
+                  activeSessionId: event.payload.session_id,
+                  isStartingNewChat: false,
+                  selectedAssistantMessageId: null,
+                  latestResponse:
+                    nextState.streamingResponse ?? nextState.latestResponse,
+                  streamingAnswer: '',
+                  streamingResponse: null,
+                  streamingStage: null,
+                  loading: false,
+                  pendingQuestion: null,
+                };
               });
               queryClient.invalidateQueries({
                 queryKey: ['chat-session', event.payload.session_id],
@@ -233,14 +488,17 @@ export function ChatPage() {
           queryKey: ['chat-session', nextSessionId],
         });
       }
-      setUiState((current) => ({
-        ...(current.brainId === activeBrainId
-          ? current
-          : createChatUiState(activeBrainId)),
-        brainId: activeBrainId,
-        loading: false,
-        pendingQuestion: null,
-      }));
+      if (!didComplete) {
+        setUiState((current) => ({
+          ...(current.brainId === activeBrainId
+            ? current
+            : createChatUiState(activeBrainId)),
+          brainId: activeBrainId,
+          loading: false,
+          pendingQuestion: null,
+          streamingStage: null,
+        }));
+      }
     }
   }
 
@@ -304,6 +562,8 @@ export function ChatPage() {
           hasDocuments={(documentsQuery.data?.length ?? 0) > 0}
           pendingQuestion={scopedUiState.pendingQuestion}
           streamingAnswer={scopedUiState.streamingAnswer}
+          streamingResponse={scopedUiState.streamingResponse}
+          streamingStage={scopedUiState.streamingStage}
           selectedAssistantMessageId={selectedAssistantMessage?.id ?? null}
           onAssistantMessageSelect={(messageId) => {
             setUiState((current) => ({
@@ -315,6 +575,7 @@ export function ChatPage() {
               latestResponse: null,
             }));
           }}
+          onSourceClick={setDrawerSource}
           onSubmit={handleChat}
           loading={scopedUiState.loading}
         />
@@ -324,13 +585,30 @@ export function ChatPage() {
       {(analysisGaps.length > 0 || analysisSources.length > 0) && (
         <Box w='80' pr={6} py={6} display={{ base: 'none', '2xl': 'block' }}>
           <Stack gap='6' h='full' overflowY='auto'>
-            <KnowledgeGapPanel gaps={analysisGaps} />
-            {analysisSources.length ? (
-              <SourcePanel sources={analysisSources} />
+            {shouldShowProofPanel ? (
+              <AnswerProofPanel
+                confidenceScore={proofConfidenceScore}
+                intent={answerIntent}
+                supportSummary={supportSummary}
+                knowledgeGaps={analysisGaps}
+                contradictionWarnings={contradictionWarnings}
+                relatedEntities={relatedEntities}
+                evidenceItems={analysisSources}
+                citationCoverageStatus={citationCoverageStatus}
+                validCitationCount={validCitationCount}
+                rejectedCitationCount={rejectedCitationCount}
+                onSourceClick={setDrawerSource}
+              />
             ) : null}
           </Stack>
         </Box>
       )}
+
+      <SourceDrawer
+        source={drawerSource}
+        isOpen={drawerSource !== null}
+        onClose={() => setDrawerSource(null)}
+      />
     </Flex>
   );
 }
