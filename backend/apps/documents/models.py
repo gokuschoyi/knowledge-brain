@@ -41,6 +41,8 @@ class Document(models.Model):
     raw_text = models.TextField(blank=True)
     raw_file = models.FileField(upload_to="documents/", null=True, blank=True)
     url = models.URLField(blank=True)
+    extracted_text = models.TextField(null=True, blank=True)
+    structure_metadata = models.JSONField(default=dict, blank=True)
     source_authority = models.CharField(
         max_length=50,
         choices=AUTHORITY_CHOICES,
@@ -91,6 +93,8 @@ class Chunk(models.Model):
     embedding = VectorField(dimensions=1536, null=True, blank=True)
     importance_score = models.FloatField(default=0)
     quality_score = models.FloatField(default=0)
+    content_type = models.CharField(max_length=32, null=True, blank=True)
+    certainty_level = models.FloatField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -154,3 +158,35 @@ class ChunkExtractionArtifact(models.Model):
     class Meta:
         ordering = ["chunk__chunk_index", "id"]
         unique_together = ("ingestion_job", "chunk")
+
+
+class DocumentWord(models.Model):
+    EXTRACTION_NATIVE_PDF = "native_pdf"
+    EXTRACTION_OCR = "ocr"
+    EXTRACTION_CHOICES = [
+        (EXTRACTION_NATIVE_PDF, "Native PDF"),
+        (EXTRACTION_OCR, "OCR"),
+    ]
+
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="document_words")
+    page_number = models.PositiveIntegerField()
+    text = models.CharField(max_length=255)
+    start_char = models.PositiveIntegerField()
+    end_char = models.PositiveIntegerField()
+    bbox = models.JSONField(default=list, blank=True)
+    block_index = models.IntegerField(default=0)
+    line_index = models.IntegerField(default=0)
+    reading_order = models.IntegerField(default=0)
+    extraction_source = models.CharField(
+        max_length=32,
+        choices=EXTRACTION_CHOICES,
+        default=EXTRACTION_NATIVE_PDF,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["document_id", "page_number", "reading_order", "id"]
+        indexes = [
+            models.Index(fields=["document", "page_number", "reading_order"]),
+            models.Index(fields=["document", "start_char", "end_char"]),
+        ]
