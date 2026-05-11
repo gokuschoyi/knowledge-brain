@@ -7,6 +7,9 @@ from apps.self_healing.services.auto_repair import (
     run_brain_retrieval_enrichment,
 )
 from apps.self_healing.models import SelfHealingTask
+from apps.self_healing.services.post_ingestion_repair import (
+    run_brain_post_ingestion_repair_sweep,
+)
 
 
 @shared_task
@@ -35,3 +38,8 @@ def run_enabled_auto_repairs_task(limit_per_brain: int = 20) -> dict[str, list[i
 @shared_task
 def run_brain_retrieval_enrichment_task(brain_id: str) -> int:
     return run_brain_retrieval_enrichment(brain_id)
+
+
+@shared_task
+def run_post_ingestion_repair_sweep_task(brain_id: str) -> int:
+    return run_brain_post_ingestion_repair_sweep(brain_id)
