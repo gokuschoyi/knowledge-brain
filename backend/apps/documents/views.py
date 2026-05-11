@@ -15,6 +15,7 @@ from apps.documents.serializers import (
 )
 from apps.documents.tasks import run_chunk_bundled_extraction, run_document_ingestion
 from apps.knowledge.models import Entity, Relationship
+from apps.self_healing.services.post_ingestion_repair import build_ingestion_job_metadata
 
 
 class DocumentIngestView(APIView):
@@ -24,7 +25,10 @@ class DocumentIngestView(APIView):
         serializer = DocumentIngestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         document = serializer.save()
-        job = IngestionJob.objects.create(document=document)
+        job = IngestionJob.objects.create(
+            document=document,
+            metadata=build_ingestion_job_metadata(serializer.validated_data.get("batch_token")),
+        )
         run_document_ingestion.delay(document.id, job.id)
         return Response(
             {"document_id": document.id, "job_id": job.id, "status": job.status}, status=status.HTTP_201_CREATED

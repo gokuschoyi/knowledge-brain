@@ -46,6 +46,9 @@ from apps.knowledge.services.retrieval_enrichment import (
     summarize_chunk_text,
 )
 from apps.retrieval.services.embedding import embed_text
+from apps.self_healing.services.post_ingestion_repair import (
+    request_brain_repair_rescan_for_job,
+)
 from apps.self_healing.services.task_generator import generate_tasks_for_document
 
 logger = logging.getLogger(__name__)
@@ -86,7 +89,9 @@ class ConsolidatedRelationship:
     metadata: dict = field(default_factory=dict)
 
 
-def _resolve_entity_key(name: str | None, local_lookup: dict[str, str], entities: dict[str, ConsolidatedEntity]) -> str | None:
+def _resolve_entity_key(
+    name: str | None, local_lookup: dict[str, str], entities: dict[str, ConsolidatedEntity]
+) -> str | None:
     normalized = normalise_name(name or "")
     if not normalized:
         return None
@@ -110,7 +115,9 @@ def _select_primary_name(entity: ConsolidatedEntity) -> str:
     return ranked_names[0][0]
 
 
-def _consolidate_artifacts(artifacts: list[ChunkExtractionArtifact]) -> tuple[dict[str, ConsolidatedEntity], list[ConsolidatedClaim], list[ConsolidatedRelationship]]:
+def _consolidate_artifacts(
+    artifacts: list[ChunkExtractionArtifact],
+) -> tuple[dict[str, ConsolidatedEntity], list[ConsolidatedClaim], list[ConsolidatedRelationship]]:
     entities: dict[str, ConsolidatedEntity] = {}
     claims: dict[tuple[int, str], ConsolidatedClaim] = {}
     relationships: dict[tuple[int, str, str, str], ConsolidatedRelationship] = {}
@@ -137,9 +144,7 @@ def _consolidate_artifacts(artifacts: list[ChunkExtractionArtifact]) -> tuple[di
                 DEFAULT_ENTITY_CONFIDENCE,
             )
             aliases = {
-                alias.strip()
-                for alias in entity_data.get("aliases", [])
-                if isinstance(alias, str) and alias.strip()
+                alias.strip() for alias in entity_data.get("aliases", []) if isinstance(alias, str) and alias.strip()
             }
             aliases.add(name)
             consolidated.aliases.update(aliases)
@@ -374,17 +379,19 @@ def _chunk_progress(job: IngestionJob) -> dict[str, int]:
         ChunkExtractionArtifact.STATUS_FAILED: 0,
     }
     aggregate = {
-        item["status"]: item["count"]
-        for item in job.chunk_artifacts.values("status").annotate(count=Count("id"))
+        item["status"]: item["count"] for item in job.chunk_artifacts.values("status").annotate(count=Count("id"))
     }
     counts.update(aggregate)
-    counts["total"] = sum(counts[status] for status in (
-        ChunkExtractionArtifact.STATUS_PENDING,
-        ChunkExtractionArtifact.STATUS_QUEUED,
-        ChunkExtractionArtifact.STATUS_RUNNING,
-        ChunkExtractionArtifact.STATUS_COMPLETED,
-        ChunkExtractionArtifact.STATUS_FAILED,
-    ))
+    counts["total"] = sum(
+        counts[status]
+        for status in (
+            ChunkExtractionArtifact.STATUS_PENDING,
+            ChunkExtractionArtifact.STATUS_QUEUED,
+            ChunkExtractionArtifact.STATUS_RUNNING,
+            ChunkExtractionArtifact.STATUS_COMPLETED,
+            ChunkExtractionArtifact.STATUS_FAILED,
+        )
+    )
     counts["successful_artifacts"] = counts[ChunkExtractionArtifact.STATUS_COMPLETED]
     return counts
 
@@ -422,7 +429,9 @@ def run_parallel_v2_ingestion(document_id: int, job_id: int) -> None:
     job.status = IngestionJob.STATUS_PROCESSING
     job.save(update_fields=["metadata", "status", "updated_at"])
 
-    set_stage_status(job, "extracting_text", "running", "Extracting text", progress=10, status=IngestionJob.STATUS_PROCESSING)
+    set_stage_status(
+        job, "extracting_text", "running", "Extracting text", progress=10, status=IngestionJob.STATUS_PROCESSING
+    )
     raw_text = extract_text(document)
     if not raw_text.strip():
         source_hint = "uploaded file"
@@ -514,9 +523,7 @@ def run_chunk_bundled_extraction_for_artifact(artifact_id: int) -> None:
     artifact.attempt_count += 1
     artifact.started_at = timezone.now()
     artifact.error_message = ""
-    artifact.empty_verification_status = (
-        ChunkExtractionArtifact.EMPTY_CHECK_NOT_NEEDED
-    )
+    artifact.empty_verification_status = ChunkExtractionArtifact.EMPTY_CHECK_NOT_NEEDED
     artifact.empty_verification_message = ""
     artifact.save(
         update_fields=[
@@ -543,13 +550,10 @@ def run_chunk_bundled_extraction_for_artifact(artifact_id: int) -> None:
             artifact.payload = {}
             artifact.status = ChunkExtractionArtifact.STATUS_FAILED
             artifact.error_message = (
-                "Chunk extraction returned empty results but the verifier "
-                "detected likely extractable knowledge."
+                "Chunk extraction returned empty results but the verifier " "detected likely extractable knowledge."
             )
             artifact.empty_verification_status = EMPTY_CHECK_RETRY_RECOMMENDED
-            artifact.empty_verification_message = extraction[
-                "empty_verification_message"
-            ]
+            artifact.empty_verification_message = extraction["empty_verification_message"]
             artifact.completed_at = timezone.now()
             artifact.save(
                 update_fields=[
@@ -564,12 +568,8 @@ def run_chunk_bundled_extraction_for_artifact(artifact_id: int) -> None:
             )
             return
         payload = extraction["payload"]
-        artifact.empty_verification_status = extraction[
-            "empty_verification_status"
-        ]
-        artifact.empty_verification_message = extraction[
-            "empty_verification_message"
-        ]
+        artifact.empty_verification_status = extraction["empty_verification_status"]
+        artifact.empty_verification_message = extraction["empty_verification_message"]
         warnings = inspect_payload_confidence_patterns(payload)
         if warnings:
             logger.warning(
@@ -689,6 +689,7 @@ def check_or_finalize_ingestion(job_id: int) -> None:
             job.error_message = "All chunk extraction tasks failed."
             job.metadata = metadata
             job.save(update_fields=["error_message", "metadata", "updated_at"])
+            request_brain_repair_rescan_for_job(job.id)
             return
 
         if finalization.get("is_finalizing"):
@@ -786,11 +787,12 @@ def finalize_ingestion_job(job_id: int) -> None:
         job.metadata = metadata
         job.save(update_fields=["metadata", "updated_at"])
         completion_message = (
-            f"Ingestion complete with {failed_count} failed chunk task(s)"
-            if failed_count
-            else "Ingestion complete"
+            f"Ingestion complete with {failed_count} failed chunk task(s)" if failed_count else "Ingestion complete"
         )
-        set_stage_status(job, "completed", "completed", completion_message, progress=100, status=IngestionJob.STATUS_COMPLETED)
+        set_stage_status(
+            job, "completed", "completed", completion_message, progress=100, status=IngestionJob.STATUS_COMPLETED
+        )
+        request_brain_repair_rescan_for_job(job.id)
     except Exception as exc:
         metadata = ensure_stage_metadata(job)
         finalization = dict(metadata.get("finalization", {}))
@@ -810,4 +812,5 @@ def finalize_ingestion_job(job_id: int) -> None:
             progress=job.progress,
             status=IngestionJob.STATUS_FAILED,
         )
+        request_brain_repair_rescan_for_job(job.id)
         raise

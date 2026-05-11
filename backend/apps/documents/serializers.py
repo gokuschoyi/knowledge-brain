@@ -12,6 +12,8 @@ _ALLOWED_FILE_EXTENSIONS = {".pdf", ".txt", ".md", ".docx", ".xlsx", ".csv", ".p
 
 
 class DocumentIngestSerializer(serializers.ModelSerializer):
+    batch_token = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
     class Meta:
         model = Document
         fields = [
@@ -27,14 +29,18 @@ class DocumentIngestSerializer(serializers.ModelSerializer):
             "tags",
             "llm_provider",
             "llm_model",
+            "batch_token",
         ]
+
+    def create(self, validated_data):
+        validated_data.pop("batch_token", None)
+        return super().create(validated_data)
 
     def validate_raw_file(self, value):
         suffix = Path(value.name).suffix.lower()
         if suffix not in _ALLOWED_FILE_EXTENSIONS:
             raise serializers.ValidationError(
-                f"Unsupported file type '{suffix}'. "
-                f"Allowed: {', '.join(sorted(_ALLOWED_FILE_EXTENSIONS))}"
+                f"Unsupported file type '{suffix}'. " f"Allowed: {', '.join(sorted(_ALLOWED_FILE_EXTENSIONS))}"
             )
         return value
 
