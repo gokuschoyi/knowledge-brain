@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -40,6 +42,15 @@ class BundledExtractionResponse(BaseModel):
     entities: list[ExtractedEntity] = Field(default_factory=list)
     claims: list[ExtractedClaim] = Field(default_factory=list)
     relationships: list[ExtractedRelationship] = Field(default_factory=list)
+    content_type: Literal[
+        "definition", "example", "argument", "data_statistics", "procedure", "reference", "narrative"
+    ] = Field(default="narrative")
+    certainty_level: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="0=highly hedged/speculative language, 1=direct factual assertion",
+    )
 
 
 class EmptyExtractionVerificationResponse(BaseModel):
@@ -47,8 +58,20 @@ class EmptyExtractionVerificationResponse(BaseModel):
     reason: str = Field(min_length=1)
 
 
+class AnswerCitation(BaseModel):
+    chunk_id: int
+    quote_text: str = Field(min_length=1)
+
+
+class AnswerSection(BaseModel):
+    content: str = Field(min_length=1)
+    chunk_ids: list[int] = Field(default_factory=list)
+
+
 class AnswerResponse(BaseModel):
-    answer: str
+    answer_markdown: str
+    grounded_citations: list[AnswerCitation] = Field(default_factory=list)
+    answer_sections: list[AnswerSection] = Field(default_factory=list)
     confidence_score: float = Field(ge=0.0, le=1.0)
     source_chunk_ids: list[int] = Field(default_factory=list)
     related_entity_ids: list[int] = Field(default_factory=list)
