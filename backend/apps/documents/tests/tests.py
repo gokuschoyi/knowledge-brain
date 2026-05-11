@@ -21,6 +21,12 @@ from apps.documents.services.parallel_ingestion_v2 import (
 from apps.documents.tasks import run_document_ingestion
 from apps.knowledge.models import ChunkEntityMention, Claim, Entity, Relationship
 from apps.knowledge.services.bundled_extraction import generate_document_summary
+from apps.self_healing.models import SelfHealingTask
+from apps.self_healing.services.post_ingestion_repair import (
+    build_ingestion_job_metadata,
+    request_brain_repair_rescan_for_job,
+    run_brain_post_ingestion_repair_sweep,
+)
 
 
 class V2ConfidenceCalibrationTests(TestCase):
@@ -138,9 +144,7 @@ class V2ConfidenceCalibrationTests(TestCase):
             },
         )
 
-        entities, claims, relationships = _consolidate_artifacts(
-            [artifact_one, artifact_two]
-        )
+        entities, claims, relationships = _consolidate_artifacts([artifact_one, artifact_two])
         _persist_consolidated_knowledge(
             self.document,
             entities,
@@ -150,9 +154,7 @@ class V2ConfidenceCalibrationTests(TestCase):
 
         entity = Entity.objects.get(name="Alpha Engine")
         mention_confidences = list(
-            ChunkEntityMention.objects.filter(entity=entity).values_list(
-                "confidence", flat=True
-            )
+            ChunkEntityMention.objects.filter(entity=entity).values_list("confidence", flat=True)
         )
         claims = list(Claim.objects.filter(subject_entity=entity).order_by("id"))
         relationship = Relationship.objects.get(source_entity=entity)
@@ -165,15 +167,8 @@ class V2ConfidenceCalibrationTests(TestCase):
         self.assertTrue(all(confidence < 1.0 for confidence in mention_confidences))
         self.assertEqual(len(claims), 2)
         self.assertTrue(all(claim.confidence < 1.0 for claim in claims))
-        self.assertTrue(
-            all(claim.metadata["raw_confidence"] == 1.0 for claim in claims)
-        )
-        self.assertTrue(
-            all(
-                claim.metadata["confidence_source"] == "llm+heuristic"
-                for claim in claims
-            )
-        )
+        self.assertTrue(all(claim.metadata["raw_confidence"] == 1.0 for claim in claims))
+        self.assertTrue(all(claim.metadata["confidence_source"] == "llm+heuristic" for claim in claims))
         self.assertLess(relationship.confidence, 1.0)
         self.assertIn(
             "fallback_relationship_type",
@@ -201,11 +196,16 @@ class IngestionPipelineDispatchTests(TestCase):
             job_id=self.job.id,
         )
 
+    @patch("apps.documents.services.ingestion_pipeline.request_brain_repair_rescan_for_job")
     @patch(
         "apps.documents.services.ingestion_pipeline.run_parallel_v2_ingestion",
         side_effect=RuntimeError("pipeline boom"),
     )
-    def test_ingestion_pipeline_marks_document_and_job_failed_when_v2_raises(self, _mock_run_parallel_v2):
+    def test_ingestion_pipeline_marks_document_and_job_failed_when_v2_raises(
+        self,
+        _mock_run_parallel_v2,
+        mock_request_rescan,
+    ):
         with self.assertRaisesMessage(RuntimeError, "pipeline boom"):
             run_ingestion_pipeline(self.document.id, self.job.id)
 
@@ -216,6 +216,7 @@ class IngestionPipelineDispatchTests(TestCase):
         self.assertEqual(self.document.error_message, "pipeline boom")
         self.assertEqual(self.job.status, IngestionJob.STATUS_FAILED)
         self.assertEqual(self.job.error_message, "pipeline boom")
+        mock_request_rescan.assert_called_once_with(self.job.id)
 
 
 class IngestionFinalizationTests(TestCase):
@@ -247,11 +248,14 @@ class IngestionFinalizationTests(TestCase):
             metadata={},
         )
 
+    @patch("apps.documents.services.parallel_ingestion_v2.request_brain_repair_rescan_for_job")
     @patch("apps.documents.services.parallel_ingestion_v2.generate_tasks_for_document")
     @patch("apps.documents.services.parallel_ingestion_v2.detect_contradictions_for_document")
     @patch("apps.documents.services.parallel_ingestion_v2.enrich_document_knowledge")
     @patch("apps.documents.services.parallel_ingestion_v2.build_graph_for_document")
-    @patch("apps.documents.services.parallel_ingestion_v2.generate_document_summary", return_value="Consolidated summary")
+    @patch(
+        "apps.documents.services.parallel_ingestion_v2.generate_document_summary", return_value="Consolidated summary"
+    )
     @patch("apps.documents.services.parallel_ingestion_v2.score_document_quality", return_value=0.91)
     def test_finalize_ingestion_job_completes_with_partial_chunk_failures(
         self,
@@ -261,6 +265,7 @@ class IngestionFinalizationTests(TestCase):
         _mock_enrich_document_knowledge,
         _mock_detect_contradictions,
         _mock_generate_tasks,
+        mock_request_rescan,
     ):
         successful_chunk = self._create_chunk(0, "Alpha Engine coordinates payment workflows.")
         failed_chunk = self._create_chunk(1, "Billing Core reconciles invoices.")
@@ -335,8 +340,10 @@ class IngestionFinalizationTests(TestCase):
             llm_model=self.document.llm_model,
             document_id=self.document.id,
         )
+        mock_request_rescan.assert_called_once_with(self.job.id)
 
-    def test_check_or_finalize_ingestion_marks_job_failed_when_all_chunk_tasks_fail(self):
+    @patch("apps.documents.services.parallel_ingestion_v2.request_brain_repair_rescan_for_job")
+    def test_check_or_finalize_ingestion_marks_job_failed_when_all_chunk_tasks_fail(self, mock_request_rescan):
         failed_chunk = self._create_chunk(0, "No structured knowledge survived.")
         ChunkExtractionArtifact.objects.create(
             ingestion_job=self.job,
@@ -356,6 +363,7 @@ class IngestionFinalizationTests(TestCase):
         self.assertEqual(self.job.status, IngestionJob.STATUS_FAILED)
         self.assertEqual(self.job.error_message, "All chunk extraction tasks failed.")
         self.assertTrue(self.job.metadata["finalization"]["is_finalized"])
+        mock_request_rescan.assert_called_once_with(self.job.id)
 
 
 class DocumentSummaryGenerationTests(TestCase):
@@ -402,7 +410,7 @@ class DocumentSummaryGenerationTests(TestCase):
     @patch("apps.knowledge.services.bundled_extraction.get_chat_model", return_value=object())
     @patch(
         "apps.knowledge.services.bundled_extraction.invoke_structured_output",
-        return_value=DocumentSummaryResponse(summary=""),
+        return_value=type("SummaryResponse", (), {"summary": ""})(),
     )
     def test_generate_document_summary_falls_back_only_when_summary_empty(
         self,
@@ -419,3 +427,202 @@ class DocumentSummaryGenerationTests(TestCase):
         )
 
         self.assertEqual(summary, text[:400])
+
+
+class PostIngestionRepairSchedulingTests(TestCase):
+    def setUp(self):
+        self.brain = Brain.objects.create(name="Rescan Brain")
+
+    @patch("apps.self_healing.tasks.run_post_ingestion_repair_sweep_task.delay")
+    def test_single_completed_job_requests_brain_rescan_immediately(self, mock_delay):
+        document = Document.objects.create(
+            brain=self.brain,
+            title="Single upload",
+            source_type=Document.SOURCE_TEXT,
+            raw_text="Alpha Engine overview.",
+            status=Document.STATUS_COMPLETED,
+        )
+        job = IngestionJob.objects.create(
+            document=document,
+            status=IngestionJob.STATUS_COMPLETED,
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            requested = request_brain_repair_rescan_for_job(job.id)
+
+        self.assertTrue(requested)
+        job.refresh_from_db()
+        self.brain.refresh_from_db()
+        self.assertTrue(job.metadata["repair_rescan_requested"])
+        self.assertEqual(self.brain.pending_ingestion_repair_rescan_version, 1)
+        self.assertTrue(self.brain.ingestion_repair_rescan_running)
+        mock_delay.assert_called_once_with(str(self.brain.id))
+
+    @patch("apps.self_healing.tasks.run_post_ingestion_repair_sweep_task.delay")
+    def test_bulk_jobs_wait_until_batch_is_terminal_before_requesting_rescan(self, mock_delay):
+        batch_token = "batch-123"
+        doc_one = Document.objects.create(
+            brain=self.brain,
+            title="Bulk one",
+            source_type=Document.SOURCE_TEXT,
+            raw_text="Alpha Engine details.",
+            status=Document.STATUS_COMPLETED,
+        )
+        doc_two = Document.objects.create(
+            brain=self.brain,
+            title="Bulk two",
+            source_type=Document.SOURCE_TEXT,
+            raw_text="Billing Core details.",
+            status=Document.STATUS_PROCESSING,
+        )
+        job_one = IngestionJob.objects.create(
+            document=doc_one,
+            status=IngestionJob.STATUS_COMPLETED,
+            metadata=build_ingestion_job_metadata(batch_token),
+        )
+        job_two = IngestionJob.objects.create(
+            document=doc_two,
+            status=IngestionJob.STATUS_PROCESSING,
+            metadata=build_ingestion_job_metadata(batch_token),
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            requested_early = request_brain_repair_rescan_for_job(job_one.id)
+        self.assertFalse(requested_early)
+        mock_delay.assert_not_called()
+
+        job_two.status = IngestionJob.STATUS_FAILED
+        job_two.save(update_fields=["status", "updated_at"])
+        with self.captureOnCommitCallbacks(execute=True):
+            requested_terminal = request_brain_repair_rescan_for_job(job_two.id)
+            duplicate_request = request_brain_repair_rescan_for_job(job_one.id)
+
+        self.assertTrue(requested_terminal)
+        self.assertFalse(duplicate_request)
+        self.brain.refresh_from_db()
+        job_one.refresh_from_db()
+        job_two.refresh_from_db()
+        self.assertTrue(job_one.metadata["repair_rescan_requested"])
+        self.assertTrue(job_two.metadata["repair_rescan_requested"])
+        self.assertEqual(self.brain.pending_ingestion_repair_rescan_version, 1)
+        mock_delay.assert_called_once_with(str(self.brain.id))
+
+
+class PostIngestionRepairSweepTests(TestCase):
+    def setUp(self):
+        self.brain = Brain.objects.create(
+            name="Repair Sweep Brain",
+            pending_ingestion_repair_rescan_version=1,
+            completed_ingestion_repair_rescan_version=0,
+            ingestion_repair_rescan_running=True,
+        )
+
+    def _create_document(self, title: str) -> Document:
+        return Document.objects.create(
+            brain=self.brain,
+            title=title,
+            source_type=Document.SOURCE_TEXT,
+            raw_text=f"{title} text",
+            status=Document.STATUS_COMPLETED,
+        )
+
+    def _create_chunk(self, document: Document, index: int, text: str) -> Chunk:
+        return Chunk.objects.create(
+            document=document,
+            text=text,
+            summary=text[:120],
+            chunk_index=index,
+            token_count=80,
+            importance_score=0.5,
+            quality_score=0.8,
+            metadata={},
+        )
+
+    def test_brain_repair_sweep_creates_cross_document_contradiction_task(self):
+        document_one = self._create_document("Pricing A")
+        document_two = self._create_document("Pricing B")
+        shared_entity = Entity.objects.create(
+            brain=self.brain,
+            name="Pro Plan",
+            canonical_name="Pro Plan",
+            entity_type="plan",
+            description="Subscription plan",
+            aliases=[],
+        )
+        chunk_one = self._create_chunk(document_one, 0, "The Pro Plan costs $10 per month.")
+        chunk_two = self._create_chunk(document_two, 0, "The Pro Plan costs $20 per month.")
+        ChunkEntityMention.objects.create(
+            chunk=chunk_one, entity=shared_entity, mention_text="Pro Plan", confidence=0.9
+        )
+        ChunkEntityMention.objects.create(
+            chunk=chunk_two, entity=shared_entity, mention_text="Pro Plan", confidence=0.9
+        )
+        Claim.objects.create(
+            text="The Pro Plan costs $10 per month.",
+            source_chunk=chunk_one,
+            subject_entity=shared_entity,
+            confidence=0.9,
+        )
+        Claim.objects.create(
+            text="The Pro Plan costs $20 per month.",
+            source_chunk=chunk_two,
+            subject_entity=shared_entity,
+            confidence=0.9,
+        )
+
+        processed_version = run_brain_post_ingestion_repair_sweep(self.brain.id)
+
+        self.assertEqual(processed_version, 1)
+        self.brain.refresh_from_db()
+        task = SelfHealingTask.objects.get(task_type=SelfHealingTask.TYPE_CONTRADICTION)
+        self.assertEqual(task.related_document_id, document_two.id)
+        self.assertEqual(task.payload["claim_ids"], sorted(task.payload["claim_ids"]))
+        self.assertEqual(self.brain.completed_ingestion_repair_rescan_version, 1)
+        self.assertFalse(self.brain.ingestion_repair_rescan_running)
+
+    def test_brain_repair_sweep_creates_duplicate_and_missing_definition_tasks(self):
+        document_one = self._create_document("Alpha Notes")
+        document_two = self._create_document("Beta Notes")
+        duplicate_one = Entity.objects.create(
+            brain=self.brain,
+            name="Alpha Engine",
+            canonical_name="Alpha Engine",
+            entity_type="service",
+            description="Coordinates workflows.",
+            aliases=[],
+        )
+        duplicate_two = Entity.objects.create(
+            brain=self.brain,
+            name="Alpha-Engine",
+            canonical_name="Alpha-Engine",
+            entity_type="service",
+            description="Workflow platform.",
+            aliases=[],
+        )
+        weak_entity = Entity.objects.create(
+            brain=self.brain,
+            name="Billing Core",
+            canonical_name="Billing Core",
+            entity_type="service",
+            description="concept derived from ingested sources",
+            aliases=[],
+        )
+        chunk_one = self._create_chunk(document_one, 0, "Alpha Engine uses Billing Core.")
+        chunk_two = self._create_chunk(document_two, 0, "Alpha-Engine depends on Billing Core.")
+        ChunkEntityMention.objects.create(
+            chunk=chunk_one, entity=duplicate_one, mention_text="Alpha Engine", confidence=0.8
+        )
+        ChunkEntityMention.objects.create(
+            chunk=chunk_two, entity=duplicate_two, mention_text="Alpha-Engine", confidence=0.8
+        )
+        ChunkEntityMention.objects.create(
+            chunk=chunk_one, entity=weak_entity, mention_text="Billing Core", confidence=0.8
+        )
+        ChunkEntityMention.objects.create(
+            chunk=chunk_two, entity=weak_entity, mention_text="Billing Core", confidence=0.8
+        )
+
+        run_brain_post_ingestion_repair_sweep(self.brain.id)
+
+        self.assertTrue(SelfHealingTask.objects.filter(task_type=SelfHealingTask.TYPE_DUPLICATE_ENTITY).exists())
+        self.assertTrue(SelfHealingTask.objects.filter(task_type=SelfHealingTask.TYPE_MISSING_DEFINITION).exists())
