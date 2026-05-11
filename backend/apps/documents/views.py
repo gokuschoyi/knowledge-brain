@@ -3,7 +3,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.documents.models import Chunk, ChunkExtractionArtifact, Document, IngestionJob
+from apps.documents.models import Chunk, ChunkExtractionArtifact, Document, DocumentWord, IngestionJob
 from apps.documents.services.document_cleanup import delete_document_and_cleanup
 from apps.documents.serializers import (
     ChunkSerializer,
@@ -130,6 +130,56 @@ class DocumentRelationshipsView(generics.ListAPIView):
         return Relationship.objects.filter(evidence_chunk__document_id=self.kwargs["pk"]).select_related(
             "source_entity", "target_entity"
         )
+
+
+class DocumentRawTextView(APIView):
+    """GET /api/documents/<pk>/raw-text/
+    Returns the document's extracted text and page boundaries for the source drawer."""
+
+    def get(self, request, pk: int):
+        try:
+            document = Document.objects.get(id=pk)
+        except Document.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        from pathlib import Path as _Path
+
+        file_extension = None
+        if document.raw_file:
+            file_extension = _Path(document.raw_file.name).suffix.lstrip(".").lower()
+
+        page_boundaries = []
+        if file_extension == "pdf":
+            page_boundaries = (document.structure_metadata or {}).get("page_boundaries", [])
+
+        return Response({
+            "document_id": document.id,
+            "source_type": document.source_type,
+            "file_extension": file_extension,
+            "text": document.extracted_text or document.raw_text or "",
+            "page_boundaries": page_boundaries,
+            "structure_metadata": document.structure_metadata or {},
+            "raw_file_url": request.build_absolute_uri(document.raw_file.url) if document.raw_file else None,
+        })
+
+
+class ChunkWordBboxesView(APIView):
+    """GET /api/documents/<doc_pk>/chunks/<chunk_pk>/word-bboxes/
+    Returns word-level bounding boxes stored during PDF ingestion."""
+
+    def get(self, request, doc_pk: int, chunk_pk: int):
+        try:
+            chunk = Chunk.objects.get(id=chunk_pk, document_id=doc_pk)
+        except Chunk.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        meta = chunk.metadata or {}
+        words = DocumentWord.objects.filter(
+            document_id=doc_pk,
+            end_char__gt=meta.get("start_char", 0),
+            start_char__lt=meta.get("end_char", 0),
+        ).order_by("page_number", "reading_order", "id")
+        return Response({"chunk_id": chunk_pk, "word_bboxes": [word.bbox for word in words]})
 
 
 class IngestionJobDetailView(generics.RetrieveAPIView):

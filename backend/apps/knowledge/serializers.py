@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
-from apps.knowledge.models import Claim, Entity, Relationship
+from pathlib import Path
+
+from apps.knowledge.models import Claim, Entity, EvidenceSpan, Relationship
 
 
 class EntitySerializer(serializers.ModelSerializer):
@@ -30,3 +32,46 @@ class ClaimSerializer(serializers.ModelSerializer):
     class Meta:
         model = Claim
         fields = "__all__"
+
+
+class EvidenceSpanSerializer(serializers.ModelSerializer):
+    document_title = serializers.CharField(source="document.title", read_only=True)
+    source_type = serializers.CharField(source="document.source_type", read_only=True)
+    raw_file_url = serializers.SerializerMethodField()
+    file_extension = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EvidenceSpan
+        fields = [
+            "id",
+            "document",
+            "document_title",
+            "chunk",
+            "chat_message",
+            "quote_text",
+            "span_start_char",
+            "span_end_char",
+            "primary_locator_type",
+            "locator_payload",
+            "created_from",
+            "review_status",
+            "notes",
+            "created_at",
+            "updated_at",
+            "source_type",
+            "raw_file_url",
+            "file_extension",
+        ]
+
+    def get_raw_file_url(self, obj):
+        if obj.document.raw_file:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.document.raw_file.url)
+            return obj.document.raw_file.url
+        return None
+
+    def get_file_extension(self, obj):
+        if obj.document.raw_file:
+            return Path(obj.document.raw_file.name).suffix.lstrip(".").lower()
+        return None
